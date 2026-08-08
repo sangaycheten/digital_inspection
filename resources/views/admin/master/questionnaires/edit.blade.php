@@ -391,16 +391,32 @@
         showOptionBadges(selectEl, row.querySelector('.sg-options-preview'), row.querySelector('.sg-options-badges'));
     }
 
-    document.getElementById('editSubGroupForm').addEventListener('submit', function() {
+    document.getElementById('editSubGroupForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const form = this;
+
+        // Remove stale injected inputs from a previous submit attempt
+        form.querySelectorAll('input[type="hidden"].sg-injected').forEach(el => el.remove());
+
         document.querySelectorAll('#sgContainer .sg-row').forEach(row => {
-            ['enabled', 'required'].forEach(field => {
-                const cb = row.querySelector(`.sg-${field}-cb`);
+            const inject = (name, value) => {
                 const hi = document.createElement('input');
-                hi.type = 'hidden'; hi.name = field + '[]';
-                hi.value = cb.checked ? '1' : '0';
+                hi.type = 'hidden'; hi.name = name; hi.className = 'sg-injected';
+                hi.value = value;
                 row.appendChild(hi);
-            });
+            };
+            inject('enabled[]',  row.querySelector('.sg-enabled-cb').checked  ? '1' : '0');
+            inject('required[]', row.querySelector('.sg-required-cb').checked ? '1' : '0');
+            // Inject field_type_id explicitly so disabled selects don't break array alignment
+            const ftWrap = row.querySelector('.sg-ft-wrap');
+            const ftSel  = row.querySelector('.sg-ft-select');
+            inject('field_type_id[]', (ftWrap && ftWrap.style.display !== 'none') ? (ftSel?.value || '') : '');
         });
+
+        // Strip name from the actual selects so they don't double-submit
+        document.querySelectorAll('#sgContainer .sg-ft-select').forEach(sel => sel.removeAttribute('name'));
+
+        form.submit();
     });
 
     document.addEventListener('DOMContentLoaded', function() {
