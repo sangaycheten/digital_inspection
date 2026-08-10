@@ -18,48 +18,37 @@ class QuestionnaireController extends Controller
 {
     public function create(): View
     {
-        $typeOptions  = DataType::valueLabelMap();
-        $fieldTypes   = FieldType::where('status', 'active')->orderBy('name')->get();
-        $fieldTypesForJs = $fieldTypes->map(fn($ft) => [
-            'id'      => $ft->id,
-            'name'    => $ft->name,
-            'type'    => $ft->type,
-            'options' => $ft->options ?? [],
-        ])->values()->all();
+        $typeOptions     = DataType::valueLabelMap();
+        $fieldTypesForJs = FieldType::where('status', 'active')->orderBy('name')->get()
+            ->map(fn($ft) => ['id' => $ft->id, 'name' => $ft->name, 'type' => $ft->type, 'options' => $ft->options ?? []])
+            ->values()->all();
         $parentQuestionnaires = Questionnaire::where('type', '!=', DataType::SubQuestionnaire->value)
             ->where('status', 'active')->orderBy('name')->get(['id', 'name', 'key']);
-        $sections      = Section::where('status', 'active')->orderBy('name')->get(['id', 'name']);
-        $sectionsForJs = $sections->map(fn($s) => ['id' => $s->id, 'name' => $s->name])->values()->all();
+        $sections = Section::where('status', 'active')->orderBy('name')->get(['id', 'name']);
 
         return view('admin.master.questionnaires.create', compact(
-            'typeOptions', 'fieldTypes', 'fieldTypesForJs', 'parentQuestionnaires', 'sections', 'sectionsForJs'
+            'typeOptions', 'fieldTypesForJs', 'parentQuestionnaires', 'sections'
         ));
     }
 
     public function edit(Questionnaire $questionnaire): View
     {
-        $typeOptions  = DataType::valueLabelMap();
-        $fieldTypes   = FieldType::where('status', 'active')->orderBy('name')->get();
-        $fieldTypesForJs = $fieldTypes->map(fn($ft) => [
-            'id'      => $ft->id,
-            'name'    => $ft->name,
-            'type'    => $ft->type,
-            'options' => $ft->options ?? [],
-        ])->values()->all();
+        $typeOptions     = DataType::valueLabelMap();
+        $fieldTypesForJs = FieldType::where('status', 'active')->orderBy('name')->get()
+            ->map(fn($ft) => ['id' => $ft->id, 'name' => $ft->name, 'type' => $ft->type, 'options' => $ft->options ?? []])
+            ->values()->all();
         $parentQuestionnaires = Questionnaire::where('type', '!=', DataType::SubQuestionnaire->value)
-            ->where('status', 'active')
-            ->where('id', '!=', $questionnaire->id)
+            ->where('status', 'active')->where('id', '!=', $questionnaire->id)
             ->orderBy('name')->get(['id', 'name', 'key']);
-        $sections      = Section::where('status', 'active')->orderBy('name')->get(['id', 'name']);
-        $sectionsForJs = $sections->map(fn($s) => ['id' => $s->id, 'name' => $s->name])->values()->all();
+        $sections          = Section::where('status', 'active')->orderBy('name')->get(['id', 'name']);
         $subQuestionnaires = $questionnaire->subQuestionnaires()->orderBy('created_at')->get();
-        $subsForJs = $subQuestionnaires->map(fn($q) => [
+        $subsForJs         = $subQuestionnaires->map(fn($q) => [
             'id'            => $q->id,
             'name'          => $q->name,
             'key'           => $q->key,
             'type'          => $q->type,
             'field_type_id' => $q->field_type_id ?? '',
-            'section_id'    => $q->section_id ?? '',
+            'section_id'    => $q->section_id    ?? '',
             'enabled'       => $q->enabled  ? '1' : '0',
             'required'      => $q->required ? '1' : '0',
             'status'        => $q->status,
@@ -67,51 +56,26 @@ class QuestionnaireController extends Controller
 
         return view('admin.master.questionnaires.edit', compact(
             'questionnaire', 'subQuestionnaires', 'subsForJs',
-            'typeOptions', 'fieldTypes', 'fieldTypesForJs',
-            'parentQuestionnaires', 'sections', 'sectionsForJs'
+            'typeOptions', 'fieldTypesForJs', 'parentQuestionnaires', 'sections'
         ));
     }
 
     public function index(Request $request): View
     {
-        $questionnaires = Questionnaire::with(['fieldType', 'subQuestionnaires'])
+        $questionnaires = Questionnaire::with(['subQuestionnaires'])
             ->whereNull('parent_id')
             ->when($request->search, fn($q) =>
                 $q->where('name', 'like', "%{$request->search}%")
                   ->orWhere('key', 'like', "%{$request->search}%"))
-            ->when($request->type, fn($q) =>
-                $q->where('type', $request->type))
-            ->when($request->section_id, fn($q) =>
-                $q->where('section_id', $request->section_id))
-            ->when($request->status, fn($q) =>
-                $q->where('status', $request->status))
+            ->when($request->type,       fn($q) => $q->where('type',       $request->type))
+            ->when($request->section_id, fn($q) => $q->where('section_id', $request->section_id))
+            ->when($request->status,     fn($q) => $q->where('status',     $request->status))
             ->latest()->paginate(15)->withQueryString();
 
         $typeOptions = DataType::valueLabelMap();
+        $sections    = Section::where('status', 'active')->orderBy('name')->get(['id', 'name']);
 
-        $fieldTypes = FieldType::where('status', 'active')->orderBy('name')->get();
-
-        $fieldTypesForJs = $fieldTypes->map(fn($ft) => [
-            'id'      => $ft->id,
-            'name'    => $ft->name,
-            'type'    => $ft->type,
-            'options' => $ft->options ?? [],
-        ])->values()->all();
-
-        // For the parent questionnaire dropdown — exclude sub-questionnaires to avoid nesting
-        $parentQuestionnaires = Questionnaire::where('type', '!=', DataType::SubQuestionnaire->value)
-            ->where('status', 'active')
-            ->orderBy('name')
-            ->get(['id', 'name', 'key']);
-
-        $sections = Section::where('status', 'active')->orderBy('name')->get(['id', 'name']);
-
-        $sectionsForJs = $sections->map(fn($s) => ['id' => $s->id, 'name' => $s->name])->values()->all();
-
-        return view('admin.master.questionnaires.index', compact(
-            'questionnaires', 'fieldTypes', 'fieldTypesForJs', 'typeOptions', 'parentQuestionnaires',
-            'sections', 'sectionsForJs'
-        ));
+        return view('admin.master.questionnaires.index', compact('questionnaires', 'typeOptions', 'sections'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -223,28 +187,6 @@ class QuestionnaireController extends Controller
 
         return redirect()->route('admin.master.questionnaires.index')
             ->with('success', "Questionnaire \"{$questionnaire->name}\" updated successfully.");
-    }
-
-    public function subGroupData(Questionnaire $parent): JsonResponse
-    {
-        $subs = Questionnaire::where('parent_id', $parent->id)
-            ->orderBy('created_at')
-            ->get(['id', 'name', 'key', 'type', 'field_type_id', 'section_id', 'enabled', 'required', 'status']);
-
-        return response()->json([
-            'parent' => ['id' => $parent->id, 'name' => $parent->name, 'key' => $parent->key],
-            'subs'   => $subs->map(fn($q) => [
-                'id'            => $q->id,
-                'name'          => $q->name,
-                'key'           => $q->key,
-                'type'          => $q->type,
-                'field_type_id' => $q->field_type_id ?? '',
-                'section_id'    => $q->section_id ?? '',
-                'enabled'       => $q->enabled ? '1' : '0',
-                'required'      => $q->required ? '1' : '0',
-                'status'        => $q->status,
-            ]),
-        ]);
     }
 
     public function updateSubGroup(Request $request, Questionnaire $parent): RedirectResponse

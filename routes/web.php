@@ -68,7 +68,6 @@ Route::middleware(['auth', 'role:system-administrator'])->prefix('admin')->name(
         Route::post('/questionnaires', [QuestionnaireController::class, 'store'])->name('questionnaires.store');
         Route::get('/questionnaires/create', [QuestionnaireController::class, 'create'])->name('questionnaires.create');
         Route::get('/questionnaires/{questionnaire}/edit', [QuestionnaireController::class, 'edit'])->name('questionnaires.edit');
-        Route::get('/questionnaires/{parent}/sub-group', [QuestionnaireController::class, 'subGroupData'])->name('questionnaires.sub-group.data');
         Route::post('/questionnaires/{parent}/sub-group', [QuestionnaireController::class, 'updateSubGroup'])->name('questionnaires.sub-group.update');
         Route::put('/questionnaires/{questionnaire}', [QuestionnaireController::class, 'update'])->name('questionnaires.update');
         Route::delete('/questionnaires/{questionnaire}', [QuestionnaireController::class, 'destroy'])->name('questionnaires.destroy');
