@@ -1,14 +1,16 @@
 <?php
 
+use App\Http\Controllers\Admin\AssetController;
+use App\Http\Controllers\Admin\JobController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\Master\BuildingController;
 use App\Http\Controllers\Admin\Master\ClientController;
 use App\Http\Controllers\Admin\Master\MasterLookupController;
 use App\Http\Controllers\Admin\Master\DataTypeController;
-use App\Http\Controllers\Admin\Master\QuestionnaireController;
 use App\Http\Controllers\Admin\Master\SectionController;
 use App\Http\Controllers\Admin\Master\SiteController;
 use App\Http\Controllers\Admin\PermissionController;
+use App\Http\Controllers\Admin\QuestionnaireController;
 use App\Http\Controllers\Admin\RbacController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\ProfileController;
@@ -32,6 +34,7 @@ Route::middleware(['auth', 'role:system-administrator'])->prefix('admin')->name(
     Route::put('/users/{user}', [RegisteredUserController::class, 'update'])->name('users.update');
     Route::delete('/users/{user}', [RegisteredUserController::class, 'destroy'])->name('users.destroy');
     Route::patch('/users/{user}/restore', [RegisteredUserController::class, 'restore'])->name('users.restore')->withTrashed();
+
     // Master Data
     Route::prefix('master')->name('master.')->group(function () {
         Route::get('/clients', [ClientController::class, 'index'])->name('clients.index');
@@ -63,14 +66,17 @@ Route::middleware(['auth', 'role:system-administrator'])->prefix('admin')->name(
         Route::post('/data-types', [DataTypeController::class, 'store'])->name('data-types.store');
         Route::put('/data-types/{fieldType}', [DataTypeController::class, 'update'])->name('data-types.update');
         Route::delete('/data-types/{fieldType}', [DataTypeController::class, 'destroy'])->name('data-types.destroy');
+    });
 
-        Route::get('/questionnaires', [QuestionnaireController::class, 'index'])->name('questionnaires.index');
-        Route::post('/questionnaires', [QuestionnaireController::class, 'store'])->name('questionnaires.store');
-        Route::get('/questionnaires/create', [QuestionnaireController::class, 'create'])->name('questionnaires.create');
-        Route::get('/questionnaires/{questionnaire}/edit', [QuestionnaireController::class, 'edit'])->name('questionnaires.edit');
-        Route::post('/questionnaires/{parent}/sub-group', [QuestionnaireController::class, 'updateSubGroup'])->name('questionnaires.sub-group.update');
-        Route::put('/questionnaires/{questionnaire}', [QuestionnaireController::class, 'update'])->name('questionnaires.update');
-        Route::delete('/questionnaires/{questionnaire}', [QuestionnaireController::class, 'destroy'])->name('questionnaires.destroy');
+    // Questionnaires (standalone module)
+    Route::prefix('questionnaires')->name('questionnaires.')->group(function () {
+        Route::get('/', [QuestionnaireController::class, 'index'])->name('index');
+        Route::post('/', [QuestionnaireController::class, 'store'])->name('store');
+        Route::get('/create', [QuestionnaireController::class, 'create'])->name('create');
+        Route::get('/{questionnaire}/edit', [QuestionnaireController::class, 'edit'])->name('edit');
+        Route::post('/{parent}/sub-group', [QuestionnaireController::class, 'updateSubGroup'])->name('sub-group.update');
+        Route::put('/{questionnaire}', [QuestionnaireController::class, 'update'])->name('update');
+        Route::delete('/{questionnaire}', [QuestionnaireController::class, 'destroy'])->name('destroy');
     });
 
     Route::get('/rbac', [RbacController::class, 'index'])->name('rbac.index');
@@ -79,6 +85,27 @@ Route::middleware(['auth', 'role:system-administrator'])->prefix('admin')->name(
     Route::post('/permissions', [PermissionController::class, 'store'])->name('permissions.store');
     Route::delete('/permissions/{permission}', [PermissionController::class, 'destroy'])->name('permissions.destroy');
     Route::get('/audit-log', [AuditLogController::class, 'index'])->name('audit-log.index');
+
+    // Jobs
+    Route::prefix('jobs')->name('jobs.')->group(function () {
+        Route::get('/',              [JobController::class, 'index'])->name('index');
+        Route::get('/create',       [JobController::class, 'create'])->name('create');
+        Route::post('/',            [JobController::class, 'store'])->name('store');
+        Route::get('/{job}',        [JobController::class, 'show'])->name('show');
+        Route::get('/{job}/edit',   [JobController::class, 'edit'])->name('edit');
+        Route::put('/{job}',        [JobController::class, 'update'])->name('update');
+    });
+
+    // Asset Register
+    Route::prefix('assets')->name('assets.')->group(function () {
+        Route::get('/',                    [AssetController::class, 'index'])->name('index');
+        Route::get('/create',              [AssetController::class, 'create'])->name('create');
+        Route::post('/',                   [AssetController::class, 'store'])->name('store');
+        Route::get('/{asset}',             [AssetController::class, 'show'])->name('show');
+        Route::get('/{asset}/edit',        [AssetController::class, 'edit'])->name('edit');
+        Route::put('/{asset}',             [AssetController::class, 'update'])->name('update');
+        Route::patch('/{asset}/remove',    [AssetController::class, 'remove'])->name('remove');
+    });
 });
 
 // Reviewer / Approver (Manager)

@@ -1,2 +1,21 @@
 
+/* ---- Brand / Logo area ---- */
+.navbar-brand-box {
+    background: #ffffff !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 12px !important;
+}
+
+.navbar-brand-box .logo img {
+    max-width: 140px;
+    height: auto !important;
+    object-fit: contain;
+}
+
+.navbar-brand-box .logo-sm img {
+    max-width: 48px;
+}
+
 /*# sourceMappingURL=custom.min.css.map */

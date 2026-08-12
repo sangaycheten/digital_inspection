@@ -14,7 +14,8 @@ class SiteController extends Controller
     public function index(Request $request): View
     {
         $sites = Site::with('client')
-            ->when($request->search, fn ($q) => $q->where('address', 'like', "%{$request->search}%"))
+            ->when($request->search, fn ($q) => $q->where('address', 'like', "%{$request->search}%")
+                                                   ->orWhere('name', 'like', "%{$request->search}%"))
             ->when($request->client_id, fn ($q) => $q->where('client_id', $request->client_id))
             ->latest()->paginate(15)->withQueryString();
 
@@ -27,7 +28,10 @@ class SiteController extends Controller
     {
         $data = $request->validate([
             'client_id'  => ['required', 'exists:clients,id'],
+            'name'       => ['nullable', 'string', 'max:255'],
             'address'    => ['required', 'string'],
+            'latitude'   => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude'  => ['nullable', 'numeric', 'between:-180,180'],
             'site_notes' => ['nullable', 'string'],
         ]);
 
@@ -46,7 +50,10 @@ class SiteController extends Controller
     {
         $data = $request->validate([
             'client_id'  => ['required', 'exists:clients,id'],
+            'name'       => ['nullable', 'string', 'max:255'],
             'address'    => ['required', 'string'],
+            'latitude'   => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude'  => ['nullable', 'numeric', 'between:-180,180'],
             'site_notes' => ['nullable', 'string'],
         ]);
 

@@ -8,7 +8,7 @@
                 <div class="page-title-right">
                     <ol class="breadcrumb m-0">
                         <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}">Home</a></li>
-                        <li class="breadcrumb-item">Master</li>
+                        
                         <li class="breadcrumb-item active">Questionnaires</li>
                     </ol>
                 </div>
@@ -31,14 +31,14 @@
                         <i class="ri-questionnaire-line me-2 text-primary"></i>All Questionnaires
                         <span class="badge bg-primary-subtle text-primary ms-1">{{ $questionnaires->total() }}</span>
                     </h5>
-                    <a href="{{ route('admin.master.questionnaires.create') }}" class="btn btn-sm btn-primary">
+                    <a href="{{ route('admin.questionnaires.create') }}" class="btn btn-sm btn-primary">
                         <i class="ri-add-line me-1"></i> Add Questionnaire
                     </a>
                 </div>
 
                 {{-- Filters --}}
                 <div class="card-body border-bottom pb-3">
-                    <form method="GET" action="{{ route('admin.master.questionnaires.index') }}" class="row g-2 align-items-end">
+                    <form method="GET" action="{{ route('admin.questionnaires.index') }}" class="row g-2 align-items-end">
                         <div class="col-md-4">
                             <label class="form-label text-muted fs-12 mb-1">Search</label>
                             <input type="text" name="search" class="form-control form-control-sm"
@@ -77,7 +77,7 @@
                             <button type="submit" class="btn btn-primary btn-sm">
                                 <i class="ri-search-line me-1"></i> Filter
                             </button>
-                            <a href="{{ route('admin.master.questionnaires.index') }}" class="btn btn-light btn-sm ms-1">
+                            <a href="{{ route('admin.questionnaires.index') }}" class="btn btn-light btn-sm ms-1">
                                 <i class="ri-refresh-line"></i> Reset
                             </a>
                         </div>
@@ -122,7 +122,13 @@
                                         <div class="fs-11 text-muted mt-1">
                                             <i class="ri-list-check-2 me-1 text-primary"></i>
                                             {{ $q->subQuestionnaires->count() }} sub-question{{ $q->subQuestionnaires->count() > 1 ? 's' : '' }}:
-                                            {{ $q->subQuestionnaires->pluck('name')->join(', ') }}
+                                            @foreach($q->subQuestionnaires as $sq)
+                                                {{ $sq->name }}
+                                                @if($sq->condition)
+                                                    <span class="badge bg-{{ $sq->condition === 'yes' ? 'success' : 'danger' }}-subtle text-{{ $sq->condition === 'yes' ? 'success' : 'danger' }} px-1">{{ ucfirst($sq->condition) }}</span>
+                                                @endif
+                                                @if(!$loop->last), @endif
+                                            @endforeach
                                         </div>
                                         @endif
                                     </td>
@@ -158,7 +164,7 @@
                                     <td class="text-muted fs-12">{{ $q->created_at->format('d M Y') }}</td>
                                     <td>
                                         <div class="hstack gap-1">
-                                            <a href="{{ route('admin.master.questionnaires.edit', $q) }}"
+                                            <a href="{{ route('admin.questionnaires.edit', $q) }}"
                                                class="btn btn-sm btn-outline-primary"
                                                title="Edit">
                                                 <i class="ri-edit-line"></i>
@@ -184,7 +190,7 @@
                                                         <p class="text-muted mb-4">Are you sure you want to delete <strong>{{ $q->name }}</strong>?</p>
                                                         <div class="hstack gap-2 justify-content-center">
                                                             <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                                                            <form method="POST" action="{{ route('admin.master.questionnaires.destroy', $q) }}">
+                                                            <form method="POST" action="{{ route('admin.questionnaires.destroy', $q) }}">
                                                                 @csrf @method('DELETE')
                                                                 <button type="submit" class="btn btn-danger">Delete</button>
                                                             </form>

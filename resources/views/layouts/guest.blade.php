@@ -7,7 +7,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
     <!-- App favicon -->
-    <link rel="shortcut icon" href="{{ asset('favicon.ico') }}">
+    <link rel="shortcut icon" href="{{ asset('favicon.png') }}" type="image/png">
 
     <!-- Layout config Js -->
     <script src="{{ asset('assets/js/layout.js') }}"></script>
@@ -41,10 +41,10 @@
                         <div class="text-center mt-sm-5 mb-4 text-white-50">
                             <div>
                                 <a href="{{ url('/') }}" class="d-inline-block auth-logo">
-                                    <img src="{{ asset('assets/images/logo-light.png') }}" alt="" height="20">
+                                    <img src="{{ asset('assets/images/aplus-safety-logo.png') }}" alt="APlus Safety" height="48">
                                 </a>
                             </div>
-                            <p class="mt-3 fs-15 fw-medium">Digital Inspection System</p>
+                            <p class="mt-3 fs-15 fw-medium">VertiSafe</p>
                         </div>
                     </div>
                 </div>

@@ -8,8 +8,8 @@
                 <div class="page-title-right">
                     <ol class="breadcrumb m-0">
                         <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}">Home</a></li>
-                        <li class="breadcrumb-item">Master</li>
-                        <li class="breadcrumb-item"><a href="{{ route('admin.master.questionnaires.index') }}">Questionnaires</a></li>
+                        
+                        <li class="breadcrumb-item"><a href="{{ route('admin.questionnaires.index') }}">Questionnaires</a></li>
                         <li class="breadcrumb-item active">Edit</li>
                     </ol>
                 </div>
@@ -45,7 +45,7 @@
                 </div>
 
                 <form method="POST"
-                      action="{{ route('admin.master.questionnaires.sub-group.update', $questionnaire) }}"
+                      action="{{ route('admin.questionnaires.sub-group.update', $questionnaire) }}"
                       id="editSubGroupForm">
                     @csrf
                     <div class="card-body">
@@ -72,7 +72,7 @@
 
                     </div>
                     <div class="card-footer d-flex gap-2 justify-content-end">
-                        <a href="{{ route('admin.master.questionnaires.index') }}" class="btn btn-light">
+                        <a href="{{ route('admin.questionnaires.index') }}" class="btn btn-light">
                             <i class="ri-arrow-left-line me-1"></i> Cancel
                         </a>
                         <button type="submit" class="btn btn-primary">
@@ -96,7 +96,7 @@
                 </div>
 
                 <form method="POST"
-                      action="{{ route('admin.master.questionnaires.update', $questionnaire) }}"
+                      action="{{ route('admin.questionnaires.update', $questionnaire) }}"
                       id="editQuestionnaireForm">
                     @csrf @method('PUT')
                     <div class="card-body">
@@ -168,15 +168,31 @@
                         {{-- Parent (sub_questionnaire type only) --}}
                         <div id="editParentWrap" class="mb-3" style="display:none;">
                             <label class="form-label">Parent Questionnaire <span class="text-danger">*</span></label>
-                            <select name="parent_id" id="editParentId" class="form-select" disabled>
+                            <select name="parent_id" id="editParentId" class="form-select" disabled
+                                    onchange="onEditParentChange(this.value)">
                                 <option value="">— Select parent questionnaire —</option>
                                 @foreach($parentQuestionnaires as $pq)
-                                <option value="{{ $pq->id }}"
+                                <option value="{{ $pq->id }}" data-type="{{ $pq->type }}"
                                     {{ old('parent_id', $questionnaire->parent_id) === $pq->id ? 'selected' : '' }}>
                                     {{ $pq->name }} ({{ $pq->key }})
                                 </option>
                                 @endforeach
                             </select>
+                        </div>
+
+                        {{-- Condition (sub_questionnaire with switch parent only) --}}
+                        <div id="editConditionWrap" class="mb-3" style="display:none;">
+                            <label class="form-label">Condition <span class="text-danger">*</span></label>
+                            <select name="condition" id="editCondition" class="form-select" disabled>
+                                <option value="">— Select condition —</option>
+                                <option value="yes" {{ old('condition', $questionnaire->condition) === 'yes' ? 'selected' : '' }}>
+                                    Yes / Switch ON
+                                </option>
+                                <option value="no" {{ old('condition', $questionnaire->condition) === 'no' ? 'selected' : '' }}>
+                                    No / Switch OFF
+                                </option>
+                            </select>
+                            <div class="form-text">Determines when this sub-question is visible based on the parent switch answer.</div>
                         </div>
 
                         {{-- Enabled & Required --}}
@@ -215,7 +231,7 @@
 
                     </div>
                     <div class="card-footer d-flex gap-2 justify-content-end">
-                        <a href="{{ route('admin.master.questionnaires.index') }}" class="btn btn-light">
+                        <a href="{{ route('admin.questionnaires.index') }}" class="btn btn-light">
                             <i class="ri-arrow-left-line me-1"></i> Cancel
                         </a>
                         <button type="submit" class="btn btn-primary">
@@ -235,7 +251,7 @@
     const TYPES_WITH_OPTS  = ['switch', 'option_list'];
     const SUB_Q_TYPE       = 'sub_questionnaire';
     const DATA_TYPES_URL   = "{{ route('admin.master.data-types.index') }}";
-    const BASE_URL         = "{{ url('admin/master/questionnaires') }}";
+    const BASE_URL         = "{{ url('admin/questionnaires') }}";
 
     function populateFtSelect(sel, warn, type, selectedId) {
         sel.innerHTML = '<option value="">— Select option set —</option>';
@@ -275,6 +291,7 @@
 
     @if($subQuestionnaires->isNotEmpty())
     // ── Sub-group edit ────────────────────────────────────────────────────────
+    const PARENT_IS_SWITCH = @json($questionnaire->type === 'switch');
     function sgAddRow(prefill) {
         prefill = prefill || {};
         const container = document.getElementById('sgContainer');
@@ -316,6 +333,16 @@
             <div class="sg-options-preview mb-2 p-2 rounded border bg-light" style="display:none;">
                 <small class="text-muted me-1">Options:</small><span class="sg-options-badges"></span>
             </div>
+            <div class="sg-condition-wrap mb-2" style="display:none;">
+                <label class="form-label form-label-sm">Condition <span class="text-danger">*</span>
+                    <small class="text-muted fw-normal">— show this sub-question when switch is…</small>
+                </label>
+                <select name="condition[]" class="form-select form-select-sm sg-condition">
+                    <option value="">— Select condition —</option>
+                    <option value="yes">Yes / Switch ON</option>
+                    <option value="no">No / Switch OFF</option>
+                </select>
+            </div>
             <div class="d-flex align-items-center gap-3 flex-wrap">
                 <div class="form-check form-switch mb-0">
                     <input class="form-check-input sg-enabled-cb" type="checkbox" ${prefill.enabled !== '0' ? 'checked' : ''}>
@@ -336,6 +363,11 @@
             </div>`;
         container.appendChild(div);
         sgUpdateRemoveBtns();
+
+        const sgCondWrap = div.querySelector('.sg-condition-wrap');
+        if (sgCondWrap) sgCondWrap.style.display = PARENT_IS_SWITCH ? '' : 'none';
+        if (prefill.condition && div.querySelector('.sg-condition'))
+            div.querySelector('.sg-condition').value = prefill.condition;
 
         if (prefill.type) {
             const typeSel = div.querySelector('.sg-type-select');
@@ -422,18 +454,20 @@
     document.addEventListener('DOMContentLoaded', function() {
         @if($errors->any() && count(old('name', [])) > 0)
         const od = {
-            subId:    @json(old('sub_id', [])),
-            name:     @json(old('name', [])),
-            key:      @json(old('key', [])),
-            type:     @json(old('type', [])),
-            ftId:     @json(old('field_type_id', [])),
-            enabled:  @json(old('enabled', [])),
-            required: @json(old('required', [])),
-            status:   @json(old('status', [])),
+            subId:     @json(old('sub_id', [])),
+            name:      @json(old('name', [])),
+            key:       @json(old('key', [])),
+            type:      @json(old('type', [])),
+            ftId:      @json(old('field_type_id', [])),
+            condition: @json(old('condition', [])),
+            enabled:   @json(old('enabled', [])),
+            required:  @json(old('required', [])),
+            status:    @json(old('status', [])),
         };
         od.name.forEach((n, i) => sgAddRow({
             id: od.subId[i] || '', name: n, key: od.key[i],
             type: od.type[i], field_type_id: od.ftId[i],
+            condition: od.condition[i] || '',
             enabled:  od.enabled[i]  !== undefined ? od.enabled[i]  : '1',
             required: od.required[i] !== undefined ? od.required[i] : '1',
             status:   od.status[i]   || 'active',
@@ -451,6 +485,17 @@
 
     @else
     // ── Single edit ───────────────────────────────────────────────────────────
+    function onEditParentChange(parentId) {
+        const parentSel = document.getElementById('editParentId');
+        const condWrap  = document.getElementById('editConditionWrap');
+        const condSel   = document.getElementById('editCondition');
+        const opt       = parentId ? Array.from(parentSel.options).find(o => o.value === parentId) : null;
+        const isSwitch  = opt && opt.dataset.type === 'switch';
+        condWrap.style.display = isSwitch ? '' : 'none';
+        condSel.disabled       = !isSwitch;
+        if (!isSwitch) condSel.value = '';
+    }
+
     function onEditTypeChange(type, selectedId, parentId) {
         selectedId = selectedId || null; parentId = parentId || null;
         const ftWrap     = document.getElementById('editFieldTypeWrap');
@@ -458,14 +503,20 @@
         const label      = document.getElementById('editFieldTypeLabel');
         const parentWrap = document.getElementById('editParentWrap');
         const parentSel  = document.getElementById('editParentId');
+        const condWrap   = document.getElementById('editConditionWrap');
+        const condSel    = document.getElementById('editCondition');
 
         document.getElementById('editOptionsPreview').style.display = 'none';
         ftWrap.style.display = 'none'; ftSel.disabled = true;
         parentWrap.style.display = 'none'; parentSel.disabled = true;
+        condWrap.style.display = 'none'; condSel.disabled = true;
 
         if (type === SUB_Q_TYPE) {
             parentWrap.style.display = ''; parentSel.disabled = false;
-            if (parentId) parentSel.value = parentId;
+            if (parentId) {
+                parentSel.value = parentId;
+                onEditParentChange(parentId);
+            }
             return;
         }
         if (!TYPES_WITH_OPTS.includes(type)) return;

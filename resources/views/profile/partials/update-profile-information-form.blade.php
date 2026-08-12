@@ -1,8 +1,10 @@
+@use('Illuminate\Support\Facades\Storage')
+
 <form id="send-verification" method="post" action="{{ route('verification.send') }}">
     @csrf
 </form>
 
-<form method="post" action="{{ route('profile.update') }}">
+<form method="post" action="{{ route('profile.update') }}" enctype="multipart/form-data">
     @csrf
     @method('patch')
 
@@ -12,6 +14,27 @@
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     @endif
+
+    {{-- Avatar --}}
+    <div class="mb-4">
+        <label class="form-label d-block">Profile Picture</label>
+        <div class="d-flex align-items-center gap-3">
+            <img id="avatar-preview"
+                 src="{{ $user->avatar ? Storage::url($user->avatar) : asset('assets/images/users/avatar-1.jpg') }}"
+                 alt="Avatar"
+                 class="rounded-circle"
+                 style="width:80px;height:80px;object-fit:cover;">
+            <div>
+                <input type="file" class="form-control @error('avatar') is-invalid @enderror"
+                       id="avatar" name="avatar" accept="image/*"
+                       onchange="previewAvatar(this)">
+                <div class="form-text">JPG, PNG or WebP · max 2 MB</div>
+                @error('avatar')
+                    <div class="invalid-feedback">{{ $message }}</div>
+                @enderror
+            </div>
+        </div>
+    </div>
 
     <div class="mb-3">
         <label for="name" class="form-label">Full Name</label>
@@ -53,3 +76,15 @@
         <button type="submit" class="btn btn-primary">Save Changes</button>
     </div>
 </form>
+
+@once
+<script>
+function previewAvatar(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = e => document.getElementById('avatar-preview').src = e.target.result;
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+</script>
+@endonce

@@ -1,3 +1,4 @@
+@use('Illuminate\Support\Facades\Storage')
 <!doctype html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" data-layout="vertical" data-topbar="light" data-sidebar="dark" data-sidebar-size="lg" data-sidebar-image="none" data-preloader="disable" data-theme="default" data-theme-colors="default">
 <head>
@@ -7,7 +8,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
     <!-- App favicon -->
-    <link rel="shortcut icon" href="{{ asset('favicon.ico') }}">
+    <link rel="shortcut icon" href="{{ asset('favicon.png') }}" type="image/png">
 
     <!-- jsvectormap css -->
     <link href="{{ asset('assets/libs/jsvectormap/jsvectormap.min.css') }}" rel="stylesheet" type="text/css" />
@@ -50,18 +51,18 @@
                         <div class="navbar-brand-box horizontal-logo">
                             <a href="{{ $homeUrl }}" class="logo logo-dark">
                                 <span class="logo-sm">
-                                    <img src="{{ asset('assets/images/logo-sm.png') }}" alt="" height="22">
+                                    <img src="{{ asset('assets/images/aplus-safety-logo.png') }}" alt="VertiSafe">
                                 </span>
                                 <span class="logo-lg">
-                                    <img src="{{ asset('assets/images/logo-dark.png') }}" alt="" height="17">
+                                    <img src="{{ asset('assets/images/aplus-safety-logo.png') }}" alt="VertiSafe">
                                 </span>
                             </a>
                             <a href="{{ $homeUrl }}" class="logo logo-light">
                                 <span class="logo-sm">
-                                    <img src="{{ asset('assets/images/logo-sm.png') }}" alt="" height="22">
+                                    <img src="{{ asset('assets/images/aplus-safety-logo.png') }}" alt="VertiSafe">
                                 </span>
                                 <span class="logo-lg">
-                                    <img src="{{ asset('assets/images/logo-light.png') }}" alt="" height="17">
+                                    <img src="{{ asset('assets/images/aplus-safety-logo.png') }}" alt="VertiSafe">
                                 </span>
                             </a>
                         </div>
@@ -142,7 +143,9 @@
                         <div class="dropdown ms-sm-3 header-item topbar-user">
                             <button type="button" class="btn material-shadow-none" id="page-header-user-dropdown" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                                 <span class="d-flex align-items-center">
-                                    <img class="rounded-circle header-profile-user" src="{{ asset('assets/images/users/avatar-1.jpg') }}" alt="Header Avatar">
+                                    <img class="rounded-circle header-profile-user"
+                                         src="{{ Auth::user()->avatar ? Storage::url(Auth::user()->avatar) : asset('assets/images/users/avatar-1.jpg') }}"
+                                         alt="Header Avatar">
                                     <span class="text-start ms-xl-2">
                                         <span class="d-none d-xl-inline-block ms-1 fw-medium user-name-text">{{ Auth::user()->name }}</span>
                                         <span class="d-none d-xl-block ms-1 fs-12 user-name-sub-text">{{ Auth::user()->email }}</span>
@@ -184,18 +187,18 @@
                 @endphp
                 <a href="{{ $homeUrl }}" class="logo logo-dark">
                     <span class="logo-sm">
-                        <img src="{{ asset('assets/images/logo-sm.png') }}" alt="" height="22">
+                        <img src="{{ asset('assets/images/aplus-safety-logo.png') }}" alt="VertiSafe">
                     </span>
                     <span class="logo-lg">
-                        <img src="{{ asset('assets/images/logo-dark.png') }}" alt="" height="17">
+                        <img src="{{ asset('assets/images/aplus-safety-logo.png') }}" alt="VertiSafe">
                     </span>
                 </a>
                 <a href="{{ $homeUrl }}" class="logo logo-light">
                     <span class="logo-sm">
-                        <img src="{{ asset('assets/images/logo-sm.png') }}" alt="" height="22">
+                        <img src="{{ asset('assets/images/aplus-safety-logo.png') }}" alt="VertiSafe">
                     </span>
                     <span class="logo-lg">
-                        <img src="{{ asset('assets/images/logo-light.png') }}" alt="" height="17">
+                        <img src="{{ asset('assets/images/aplus-safety-logo.png') }}" alt="VertiSafe">
                     </span>
                 </a>
                 <button type="button" class="btn btn-sm p-0 fs-20 header-item float-end btn-vertical-sm-hover" id="vertical-hover">
@@ -207,7 +210,9 @@
             <div class="dropdown sidebar-user m-1 rounded">
                 <button type="button" class="btn material-shadow-none" id="sidebar-user-dropdown" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                     <span class="d-flex align-items-center gap-2">
-                        <img class="rounded header-profile-user" src="{{ asset('assets/images/users/avatar-1.jpg') }}" alt="Avatar">
+                        <img class="rounded header-profile-user"
+                             src="{{ Auth::user()->avatar ? Storage::url(Auth::user()->avatar) : asset('assets/images/users/avatar-1.jpg') }}"
+                             alt="Avatar">
                         <span class="text-start">
                             <span class="d-block fw-medium sidebar-user-name-text">{{ Auth::user()->name }}</span>
                             <span class="d-block fs-14 sidebar-user-name-sub-text">
@@ -263,11 +268,11 @@
                 <div class="container-fluid">
                     <div class="row">
                         <div class="col-sm-6">
-                            {{ date('Y') }} &copy; {{ config('app.name', 'Digital Inspection') }}.
+                            {{ date('Y') }} &copy; VertiSafe.
                         </div>
                         <div class="col-sm-6">
                             <div class="text-sm-end d-none d-sm-block">
-                                Digital Inspection System
+                                VertiSafe
                             </div>
                         </div>
                     </div>

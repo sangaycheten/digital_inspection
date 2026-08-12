@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <title>{{ config('app.name', 'Digital Inspection') }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="shortcut icon" href="{{ asset('favicon.ico') }}">
+    <link rel="shortcut icon" href="{{ asset('favicon.png') }}" type="image/png">
     <script src="{{ asset('assets/js/layout.js') }}"></script>
     <link href="{{ asset('assets/css/bootstrap.min.css') }}" rel="stylesheet" type="text/css" />
     <link href="{{ asset('assets/css/icons.min.css') }}" rel="stylesheet" type="text/css" />
@@ -27,8 +27,8 @@
                 <div class="row justify-content-center">
                     <div class="col-md-8 col-lg-6 col-xl-5">
                         <div class="text-center mt-sm-5 mb-4 text-white-50">
-                            <img src="{{ asset('assets/images/logo-light.png') }}" alt="" height="24" class="mb-3">
-                            <h4 class="text-white">Digital Inspection System</h4>
+                            <img src="{{ asset('assets/images/aplus-safety-logo.png') }}" alt="APlus Safety" height="72" class="mb-3 rounded">
+                            <h4 class="text-white">VertiSafe</h4>
                             <p class="text-white-50">Streamline your inspection workflows</p>
                         </div>
                         <div class="card mt-4">

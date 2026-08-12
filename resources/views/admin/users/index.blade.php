@@ -41,7 +41,7 @@
                             <select name="role" class="form-select form-select-sm">
                                 <option value="">All Roles</option>
                                 <option value="system-administrator" {{ request('role') === 'system-administrator' ? 'selected' : '' }}>System Administrator</option>
-                                <option value="manager"              {{ request('role') === 'manager'              ? 'selected' : '' }}>Reviewer and Approver</option>
+                                <option value="manager"              {{ request('role') === 'manager'              ? 'selected' : '' }}>Manager</option>
                                 <option value="field-technician"     {{ request('role') === 'field-technician'     ? 'selected' : '' }}>Field Technician</option>
                                 <option value="client-user"          {{ request('role') === 'client-user'          ? 'selected' : '' }}>Client User</option>
                             </select>

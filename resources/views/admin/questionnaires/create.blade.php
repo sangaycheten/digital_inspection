@@ -8,8 +8,7 @@
                 <div class="page-title-right">
                     <ol class="breadcrumb m-0">
                         <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}">Home</a></li>
-                        <li class="breadcrumb-item">Master</li>
-                        <li class="breadcrumb-item"><a href="{{ route('admin.master.questionnaires.index') }}">Questionnaires</a></li>
+                        <li class="breadcrumb-item"><a href="{{ route('admin.questionnaires.index') }}">Questionnaires</a></li>
                         <li class="breadcrumb-item active">Add</li>
                     </ol>
                 </div>
@@ -39,7 +38,7 @@
                     </h5>
                 </div>
 
-                <form method="POST" action="{{ route('admin.master.questionnaires.store') }}" id="createMultiForm">
+                <form method="POST" action="{{ route('admin.questionnaires.store') }}" id="createMultiForm">
                     @csrf
                     <div class="card-body">
 
@@ -66,7 +65,7 @@
 
                     </div>
                     <div class="card-footer d-flex gap-2 justify-content-end">
-                        <a href="{{ route('admin.master.questionnaires.index') }}" class="btn btn-light">
+                        <a href="{{ route('admin.questionnaires.index') }}" class="btn btn-light">
                             <i class="ri-arrow-left-line me-1"></i> Cancel
                         </a>
                         <button type="submit" class="btn btn-primary">
@@ -106,6 +105,7 @@
                 </div>
             </div>
 
+            {{-- Standard section: name / key / options / toggles --}}
             <div class="q-standard-section">
                 <div class="row g-2 mb-2">
                     <div class="col-md-7">
@@ -149,29 +149,60 @@
                 </div>
             </div>
 
-            <div class="q-sub-section" style="display:none;">
-                <div class="mb-2">
-                    <label class="form-label form-label-sm">Parent Questionnaire <span class="text-danger">*</span></label>
-                    <select class="form-select form-select-sm q-parent-select">
-                        <option value="">— Select parent questionnaire —</option>
-                        @foreach($parentQuestionnaires as $pq)
-                        <option value="{{ $pq->id }}">{{ $pq->name }} ({{ $pq->key }})</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div class="border rounded p-2 bg-light">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="fw-medium fs-13">
-                            <i class="ri-list-check-2 me-1 text-primary"></i>Sub-Questions
-                        </span>
-                        <button type="button" class="btn btn-sm btn-outline-primary"
-                                onclick="addSubQRow(this.closest('.q-row'))">
-                            <i class="ri-add-line me-1"></i>Add Sub-question
-                        </button>
+            {{-- Sub-questionnaire section: manual parent entry + nested sq-rows --}}
+            <div class="q-sub-section mt-2" style="display:none;">
+
+                {{-- Parent question — manual entry (type fixed as Text) --}}
+                <div class="border rounded p-3 mb-3 bg-light">
+                    <p class="fw-semibold fs-12 text-muted text-uppercase mb-2">
+                        <i class="ri-parent-line me-1"></i>Parent Question
+                        <span class="badge bg-primary-subtle text-primary fw-normal ms-1">Text</span>
+                    </p>
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-7">
+                            <label class="form-label form-label-sm">Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-sm sq-parent-name"
+                                   maxlength="255" placeholder="e.g. Roof description">
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label form-label-sm">Key <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-sm font-monospace sq-parent-key"
+                                   maxlength="100" placeholder="e.g. roof_desc">
+                        </div>
                     </div>
-                    <div class="sq-container"></div>
+                    <div class="row g-2 align-items-center">
+                        <div class="col-auto">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input sq-parent-enabled-cb" type="checkbox" checked>
+                                <label class="form-check-label form-label-sm mb-0">Enabled</label>
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input sq-parent-required-cb" type="checkbox" checked>
+                                <label class="form-check-label form-label-sm mb-0">Required</label>
+                            </div>
+                        </div>
+                        <div class="col-md-2 ms-auto">
+                            <select class="form-select form-select-sm sq-parent-status">
+                                <option value="active" selected>Active</option>
+                                <option value="inactive">Inactive</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
+
+                {{-- Sub-questions --}}
+                <p class="fw-semibold fs-12 text-muted text-uppercase mb-2">
+                    <i class="ri-list-check-2 me-1"></i>Sub-Questions
+                </p>
+                <div class="sq-container ps-3 border-start border-2 border-primary-subtle"></div>
+                <button type="button" class="btn btn-outline-secondary btn-sm mt-2"
+                        onclick="addSubQRow(this.closest('.q-row'))">
+                    <i class="ri-add-line me-1"></i> Add Sub-question
+                </button>
             </div>
+
         </div>
     </template>
 
@@ -195,6 +226,10 @@
         for (const [val, lbl] of Object.entries(TYPE_OPTIONS_MAP))
             if (val !== SUB_Q_TYPE) html += `<option value="${val}">${lbl}</option>`;
         return html;
+    }
+
+    function sqEsc(str) {
+        return String(str).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
 
     function populateFtSelect(sel, warn, type, selectedId) {
@@ -222,7 +257,7 @@
         } else { prevEl.style.display = 'none'; }
     }
 
-    // ── Outer row management ──────────────────────────────────────────────────
+    // ── Outer row management ─────────────────────────────────────────────────
     function addQRow(prefill) {
         prefill = prefill || {};
         const tmpl  = document.getElementById('qRowTemplate');
@@ -242,12 +277,10 @@
             const typeSel = liveRow.querySelector('.q-type-select');
             typeSel.value = prefill.type;
             onQTypeChange(typeSel);
-            if (prefill.type !== SUB_Q_TYPE && prefill.field_type_id) {
+            if (prefill.field_type_id) {
                 liveRow.querySelector('.q-ft-select').value = prefill.field_type_id;
                 onQFtChange(liveRow.querySelector('.q-ft-select'));
             }
-            if (prefill.type === SUB_Q_TYPE && prefill.parent_id)
-                liveRow.querySelector('.q-parent-select').value = prefill.parent_id;
         }
     }
 
@@ -279,9 +312,11 @@
         if (type === SUB_Q_TYPE) {
             stdSection.style.display = 'none';
             subSection.style.display = '';
-            if (!row.querySelector('.sq-row')) addSubQRow(row);
+            const sqCont = row.querySelector('.sq-container');
+            if (sqCont && sqCont.querySelectorAll('.sq-row').length === 0) addSubQRow(row);
             return;
         }
+
         stdSection.style.display = '';
         subSection.style.display = 'none';
         if (!TYPES_WITH_OPTS.includes(type)) return;
@@ -297,21 +332,24 @@
         showOptionBadges(selectEl, row.querySelector('.q-options-preview'), row.querySelector('.q-options-badges'));
     }
 
-    // ── Sub-question row management ───────────────────────────────────────────
-    function addSubQRow(groupRow, prefill) {
+    // ── Sub-question row management ──────────────────────────────────────────
+    function addSubQRow(qRow, prefill) {
         prefill = prefill || {};
-        const container = groupRow.querySelector('.sq-container');
+        const container = qRow.querySelector('.sq-container');
+
         const div = document.createElement('div');
-        div.className = 'sq-row border rounded p-2 mb-2 bg-white';
+        div.className = 'sq-row mb-2 py-2';
         div.innerHTML = `
             <div class="row g-2 mb-2">
                 <div class="col-md-7">
                     <label class="form-label form-label-sm">Name <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control form-control-sm sq-name" maxlength="255" placeholder="Sub-question name">
+                    <input type="text" class="form-control form-control-sm sq-name"
+                           maxlength="255" value="${sqEsc(prefill.name || '')}" placeholder="Sub-question name">
                 </div>
                 <div class="col-md-5">
                     <label class="form-label form-label-sm">Key <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control form-control-sm font-monospace sq-key" maxlength="100" placeholder="sub_key">
+                    <input type="text" class="form-control form-control-sm font-monospace sq-key"
+                           maxlength="100" value="${sqEsc(prefill.key || '')}" placeholder="sub_key">
                 </div>
             </div>
             <div class="row g-2 mb-2">
@@ -327,7 +365,7 @@
                         <option value="">— Select option set —</option>
                     </select>
                     <div class="sq-no-configs form-text text-warning" style="display:none;">
-                        <i class="ri-alert-line me-1"></i>No option sets.
+                        <i class="ri-alert-line me-1"></i>No option sets of this type yet.
                         <a href="${DATA_TYPES_URL}" target="_blank">Create in Data Types</a>.
                     </div>
                 </div>
@@ -337,7 +375,7 @@
             </div>
             <div class="d-flex align-items-center gap-3 flex-wrap">
                 <div class="form-check form-switch mb-0">
-                    <input class="form-check-input sq-enabled-cb" type="checkbox" checked>
+                    <input class="form-check-input sq-enabled-cb" type="checkbox" ${prefill.enabled !== '0' ? 'checked' : ''}>
                     <label class="form-check-label form-label-sm mb-0">Enabled</label>
                 </div>
                 <div class="form-check form-switch mb-0">
@@ -345,25 +383,22 @@
                     <label class="form-check-label form-label-sm mb-0">Required</label>
                 </div>
                 <select class="form-select form-select-sm sq-status" style="width:auto;min-width:100px;">
-                    <option value="active" selected>Active</option>
-                    <option value="inactive">Inactive</option>
+                    <option value="active"   ${(prefill.status || 'active') === 'active'   ? 'selected' : ''}>Active</option>
+                    <option value="inactive" ${prefill.status === 'inactive' ? 'selected' : ''}>Inactive</option>
                 </select>
                 <button type="button" class="btn btn-sm btn-outline-danger ms-auto sq-remove-btn"
                         onclick="removeSqRow(this)" style="display:none;">
                     <i class="ri-delete-bin-line"></i>
                 </button>
             </div>`;
-        container.appendChild(div);
-        updateSqRemoveBtns(groupRow);
 
-        if (prefill.name)   div.querySelector('.sq-name').value   = prefill.name;
-        if (prefill.key)    div.querySelector('.sq-key').value    = prefill.key;
-        if (prefill.status) div.querySelector('.sq-status').value = prefill.status;
-        if (prefill.enabled  !== undefined) div.querySelector('.sq-enabled-cb').checked  = prefill.enabled  !== '0';
-        if (prefill.required !== undefined) div.querySelector('.sq-required-cb').checked = prefill.required !== '0';
+        container.appendChild(div);
+        updateSqRemoveBtns(qRow);
+
         if (prefill.type) {
             const typeSel = div.querySelector('.sq-type-select');
-            typeSel.value = prefill.type; onSqTypeChange(typeSel);
+            typeSel.value = prefill.type;
+            onSqTypeChange(typeSel);
             if (prefill.field_type_id) {
                 div.querySelector('.sq-ft-select').value = prefill.field_type_id;
                 onSqFtChange(div.querySelector('.sq-ft-select'));
@@ -372,14 +407,15 @@
     }
 
     function removeSqRow(btn) {
-        const groupRow = btn.closest('.q-row');
-        btn.closest('.sq-row').remove();
-        updateSqRemoveBtns(groupRow);
+        const sqRow = btn.closest('.sq-row');
+        const qRow  = sqRow.closest('.q-row');
+        sqRow.remove();
+        updateSqRemoveBtns(qRow);
     }
 
-    function updateSqRemoveBtns(groupRow) {
-        const rows = [...groupRow.querySelectorAll('.sq-row')];
-        rows.forEach(r => { r.querySelector('.sq-remove-btn').style.display = rows.length > 1 ? '' : 'none'; });
+    function updateSqRemoveBtns(qRow) {
+        const rows = [...qRow.querySelectorAll('.sq-container .sq-row')];
+        rows.forEach(r => r.querySelector('.sq-remove-btn').style.display = rows.length > 1 ? '' : 'none');
     }
 
     function onSqTypeChange(selectEl) {
@@ -390,12 +426,10 @@
         const warn   = row.querySelector('.sq-no-configs');
         const prev   = row.querySelector('.sq-options-preview');
         const label  = row.querySelector('.sq-ft-label');
-
         prev.style.display = 'none';
         ftSel.innerHTML = '<option value="">— Select option set —</option>';
         ftSel.disabled = true; ftWrap.style.display = 'none';
         if (!TYPES_WITH_OPTS.includes(type)) return;
-
         ftWrap.style.display = '';
         label.innerHTML = (type === 'switch' ? 'Switch Option Set' : 'Option List Set')
                          + ' <span class="text-danger">*</span>';
@@ -407,54 +441,81 @@
         showOptionBadges(selectEl, row.querySelector('.sq-options-preview'), row.querySelector('.sq-options-badges'));
     }
 
-    // ── Pre-submit: flatten rows into hidden inputs ────────────────────────────
+    // ── Pre-submit: flatten into hidden inputs ───────────────────────────────
     document.getElementById('createMultiForm').addEventListener('submit', function(e) {
         e.preventDefault();
         const form = this;
         form.querySelectorAll('input[type="hidden"][name$="[]"]').forEach(el => el.remove());
 
-        const payload  = [];
+        const payload   = [];
         const sectionId = document.getElementById('createSectionId').value;
 
-        document.querySelectorAll('#qRowsContainer .q-row').forEach(row => {
+        document.querySelectorAll('#qRowsContainer .q-row').forEach((row, rowIdx) => {
             const type = row.querySelector('.q-type-select').value;
+
             if (type === SUB_Q_TYPE) {
-                const parentId = row.querySelector('.q-parent-select')?.value || '';
-                row.querySelectorAll('.sq-row').forEach(sq => {
-                    const sqType   = sq.querySelector('.sq-type-select').value;
-                    const sqFtWrap = sq.querySelector('.sq-ft-wrap');
+                const groupSeq = 'g' + rowIdx;
+
+                // Parent question (manually entered, type always text)
+                payload.push({
+                    name:            row.querySelector('.sq-parent-name').value,
+                    key:             row.querySelector('.sq-parent-key').value,
+                    type:            'text',
+                    field_type_id:   '',
+                    section_id:      sectionId,
+                    parent_id:       '',
+                    condition:       '',
+                    enabled:         row.querySelector('.sq-parent-enabled-cb').checked ? '1' : '0',
+                    required:        row.querySelector('.sq-parent-required-cb').checked ? '1' : '0',
+                    status:          row.querySelector('.sq-parent-status').value,
+                    is_group_parent: '1',
+                    group_seq:       groupSeq,
+                });
+
+                // Sub-question children
+                row.querySelectorAll('.sq-container .sq-row').forEach(sqRow => {
+                    const sqType   = sqRow.querySelector('.sq-type-select').value;
+                    const sqFtWrap = sqRow.querySelector('.sq-ft-wrap');
                     payload.push({
-                        name:          sq.querySelector('.sq-name').value,
-                        key:           sq.querySelector('.sq-key').value,
-                        type:          sqType,
-                        field_type_id: (sqFtWrap && sqFtWrap.style.display !== 'none')
-                                       ? (sq.querySelector('.sq-ft-select')?.value || '') : '',
-                        section_id:    sectionId,
-                        parent_id:     parentId,
-                        enabled:       sq.querySelector('.sq-enabled-cb').checked ? '1' : '0',
-                        required:      sq.querySelector('.sq-required-cb').checked ? '1' : '0',
-                        status:        sq.querySelector('.sq-status').value,
+                        name:            sqRow.querySelector('.sq-name').value,
+                        key:             sqRow.querySelector('.sq-key').value,
+                        type:            sqType,
+                        field_type_id:   (sqFtWrap && sqFtWrap.style.display !== 'none')
+                                         ? (sqRow.querySelector('.sq-ft-select')?.value || '') : '',
+                        section_id:      sectionId,
+                        parent_id:       '',
+                        condition:       '',
+                        enabled:         sqRow.querySelector('.sq-enabled-cb').checked ? '1' : '0',
+                        required:        sqRow.querySelector('.sq-required-cb').checked ? '1' : '0',
+                        status:          sqRow.querySelector('.sq-status').value,
+                        is_group_parent: '0',
+                        group_seq:       groupSeq,
                     });
                 });
+
             } else {
                 const ftWrap = row.querySelector('.q-ft-wrap');
                 payload.push({
-                    name:          row.querySelector('.q-name').value,
-                    key:           row.querySelector('.q-key').value,
-                    type:          type,
-                    field_type_id: (ftWrap && ftWrap.style.display !== 'none')
-                                   ? (row.querySelector('.q-ft-select')?.value || '') : '',
-                    section_id:    sectionId,
-                    parent_id:     '',
-                    enabled:       row.querySelector('.q-enabled-cb').checked ? '1' : '0',
-                    required:      row.querySelector('.q-required-cb').checked ? '1' : '0',
-                    status:        row.querySelector('.q-status').value,
+                    name:            row.querySelector('.q-name').value,
+                    key:             row.querySelector('.q-key').value,
+                    type:            type,
+                    field_type_id:   (ftWrap && ftWrap.style.display !== 'none')
+                                     ? (row.querySelector('.q-ft-select')?.value || '') : '',
+                    section_id:      sectionId,
+                    parent_id:       '',
+                    condition:       '',
+                    enabled:         row.querySelector('.q-enabled-cb').checked ? '1' : '0',
+                    required:        row.querySelector('.q-required-cb').checked ? '1' : '0',
+                    status:          row.querySelector('.q-status').value,
+                    is_group_parent: '0',
+                    group_seq:       '',
                 });
             }
         });
 
         payload.forEach(d => {
-            ['name','key','type','field_type_id','section_id','parent_id','enabled','required','status'].forEach(f => {
+            ['name','key','type','field_type_id','section_id','parent_id','condition',
+             'enabled','required','status','is_group_parent','group_seq'].forEach(f => {
                 const hi = document.createElement('input');
                 hi.type = 'hidden'; hi.name = f + '[]'; hi.value = d[f] || '';
                 form.appendChild(hi);
@@ -464,7 +525,7 @@
         form.submit();
     });
 
-    // ── Init ──────────────────────────────────────────────────────────────────
+    // ── Init ────────────────────────────────────────────────────────────────
     document.addEventListener('DOMContentLoaded', function() {
         @if($errors->any() && count(old('name', [])) > 0)
         const od = {
@@ -472,14 +533,13 @@
             key:      @json(old('key', [])),
             type:     @json(old('type', [])),
             ftId:     @json(old('field_type_id', [])),
-            parentId: @json(old('parent_id', [])),
             enabled:  @json(old('enabled', [])),
             required: @json(old('required', [])),
             status:   @json(old('status', [])),
         };
         od.name.forEach((n, i) => addQRow({
             name: n, key: od.key[i], type: od.type[i],
-            field_type_id: od.ftId[i], parent_id: od.parentId[i],
+            field_type_id: od.ftId[i],
             enabled: od.enabled[i], required: od.required[i], status: od.status[i],
         }));
         @else

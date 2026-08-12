@@ -19,7 +19,10 @@
             || request()->routeIs('admin.rbac.*')
             || request()->routeIs('admin.permissions.*')
             || request()->routeIs('admin.audit-log.*');
-        $masterActive = request()->routeIs('admin.master.*') || request()->routeIs('admin.master.data-types.*');
+        $masterActive = request()->routeIs('admin.master.*');
+        $questionnairesActive = request()->routeIs('admin.questionnaires.*');
+        $assetsActive = request()->routeIs('admin.assets.*');
+        $jobsActive   = request()->routeIs('admin.jobs.*');
     @endphp
 
     <li class="nav-item">
@@ -40,7 +43,7 @@
                 <li class="nav-item">
                     <a href="{{ route('admin.rbac.index') }}"
                        class="nav-link {{ request()->routeIs('admin.rbac.*') ? 'active' : '' }}">
-                        <i class="ri-shield-keyhole-line"></i> RBAC / Roles
+                        <i class="ri-shield-keyhole-line"></i> Roles
                     </a>
                 </li>
                 <li class="nav-item">
@@ -104,28 +107,40 @@
                         <i class="ri-list-settings-line"></i> Data Types
                     </a>
                 </li>
-                <li class="nav-item">
-                    <a href="{{ route('admin.master.questionnaires.index') }}"
-                       class="nav-link {{ request()->routeIs('admin.master.questionnaires.*') ? 'active' : '' }}">
-                        <i class="ri-questionnaire-line"></i> Questionnaires
-                    </a>
-                </li>
             </ul>
         </div>
+    </li>
+
+    <li class="nav-item">
+        <a class="nav-link menu-link {{ $questionnairesActive ? 'active' : '' }}"
+           href="{{ route('admin.questionnaires.index') }}">
+            <i class="ri-questionnaire-line"></i><span>Questionnaires</span>
+        </a>
     </li>
 
     <li class="menu-title"><span>Operations</span></li>
 
     <li class="nav-item">
-        <a class="nav-link menu-link collapsed" href="#sidebarJobs" data-bs-toggle="collapse" role="button"
-           aria-expanded="false" aria-controls="sidebarJobs">
+        <a class="nav-link menu-link {{ $jobsActive ? '' : 'collapsed' }}" href="#sidebarJobs"
+           data-bs-toggle="collapse" role="button"
+           aria-expanded="{{ $jobsActive ? 'true' : 'false' }}"
+           aria-controls="sidebarJobs">
             <i class="ri-briefcase-line"></i><span>Jobs</span>
         </a>
-        <div class="collapse menu-dropdown" id="sidebarJobs">
+        <div class="collapse menu-dropdown {{ $jobsActive ? 'show' : '' }}" id="sidebarJobs">
             <ul class="nav nav-sm flex-column">
-                <li class="nav-item"><a href="#" class="nav-link">All Jobs</a></li>
-                <li class="nav-item"><a href="#" class="nav-link">Schedule Job</a></li>
-                <li class="nav-item"><a href="#" class="nav-link">Assign Technicians</a></li>
+                <li class="nav-item">
+                    <a href="{{ route('admin.jobs.index') }}"
+                       class="nav-link {{ request()->routeIs('admin.jobs.index') ? 'active' : '' }}">
+                        <i class="ri-list-unordered"></i> All Jobs
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="{{ route('admin.jobs.create') }}"
+                       class="nav-link {{ request()->routeIs('admin.jobs.create') ? 'active' : '' }}">
+                        <i class="ri-calendar-schedule-line"></i> Schedule Job
+                    </a>
+                </li>
             </ul>
         </div>
     </li>
@@ -145,14 +160,26 @@
     </li>
 
     <li class="nav-item">
-        <a class="nav-link menu-link collapsed" href="#sidebarAssets" data-bs-toggle="collapse" role="button"
-           aria-expanded="false" aria-controls="sidebarAssets">
+        <a class="nav-link menu-link {{ $assetsActive ? '' : 'collapsed' }}" href="#sidebarAssets"
+           data-bs-toggle="collapse" role="button"
+           aria-expanded="{{ $assetsActive ? 'true' : 'false' }}"
+           aria-controls="sidebarAssets">
             <i class="ri-tools-line"></i><span>Asset Register</span>
         </a>
-        <div class="collapse menu-dropdown" id="sidebarAssets">
+        <div class="collapse menu-dropdown {{ $assetsActive ? 'show' : '' }}" id="sidebarAssets">
             <ul class="nav nav-sm flex-column">
-                <li class="nav-item"><a href="#" class="nav-link">All Assets</a></li>
-                <li class="nav-item"><a href="#" class="nav-link">Asset History</a></li>
+                <li class="nav-item">
+                    <a href="{{ route('admin.assets.index') }}"
+                       class="nav-link {{ request()->routeIs('admin.assets.index') ? 'active' : '' }}">
+                        <i class="ri-list-check-3"></i> All Assets
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="{{ route('admin.assets.index', ['status' => 'fail']) }}"
+                       class="nav-link {{ request()->routeIs('admin.assets.*') && request('status') === 'fail' ? 'active' : '' }}">
+                        <i class="ri-history-line"></i> Asset History
+                    </a>
+                </li>
             </ul>
         </div>
     </li>
@@ -188,15 +215,26 @@
     <li class="menu-title"><span>Operations</span></li>
 
     <li class="nav-item">
-        <a class="nav-link menu-link collapsed" href="#sidebarJobsR" data-bs-toggle="collapse" role="button"
-           aria-expanded="false" aria-controls="sidebarJobsR">
+        <a class="nav-link menu-link {{ $jobsActive ? '' : 'collapsed' }}" href="#sidebarJobsR"
+           data-bs-toggle="collapse" role="button"
+           aria-expanded="{{ $jobsActive ? 'true' : 'false' }}"
+           aria-controls="sidebarJobsR">
             <i class="ri-briefcase-line"></i><span>Jobs</span>
         </a>
-        <div class="collapse menu-dropdown" id="sidebarJobsR">
+        <div class="collapse menu-dropdown {{ $jobsActive ? 'show' : '' }}" id="sidebarJobsR">
             <ul class="nav nav-sm flex-column">
-                <li class="nav-item"><a href="#" class="nav-link">All Jobs</a></li>
-                <li class="nav-item"><a href="#" class="nav-link">Schedule Job</a></li>
-                <li class="nav-item"><a href="#" class="nav-link">Assign Technicians</a></li>
+                <li class="nav-item">
+                    <a href="{{ route('admin.jobs.index') }}"
+                       class="nav-link {{ request()->routeIs('admin.jobs.index') ? 'active' : '' }}">
+                        <i class="ri-list-unordered"></i> All Jobs
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="{{ route('admin.jobs.create') }}"
+                       class="nav-link {{ request()->routeIs('admin.jobs.create') ? 'active' : '' }}">
+                        <i class="ri-calendar-schedule-line"></i> Schedule Job
+                    </a>
+                </li>
             </ul>
         </div>
     </li>
@@ -216,14 +254,26 @@
     </li>
 
     <li class="nav-item">
-        <a class="nav-link menu-link collapsed" href="#sidebarAssetsR" data-bs-toggle="collapse" role="button"
-           aria-expanded="false" aria-controls="sidebarAssetsR">
+        <a class="nav-link menu-link {{ $assetsActive ? '' : 'collapsed' }}" href="#sidebarAssetsR"
+           data-bs-toggle="collapse" role="button"
+           aria-expanded="{{ $assetsActive ? 'true' : 'false' }}"
+           aria-controls="sidebarAssetsR">
             <i class="ri-tools-line"></i><span>Asset Register</span>
         </a>
-        <div class="collapse menu-dropdown" id="sidebarAssetsR">
+        <div class="collapse menu-dropdown {{ $assetsActive ? 'show' : '' }}" id="sidebarAssetsR">
             <ul class="nav nav-sm flex-column">
-                <li class="nav-item"><a href="#" class="nav-link">All Assets</a></li>
-                <li class="nav-item"><a href="#" class="nav-link">Asset History</a></li>
+                <li class="nav-item">
+                    <a href="{{ route('admin.assets.index') }}"
+                       class="nav-link {{ request()->routeIs('admin.assets.index') ? 'active' : '' }}">
+                        <i class="ri-list-check-3"></i> All Assets
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="{{ route('admin.assets.index', ['status' => 'fail']) }}"
+                       class="nav-link {{ request()->routeIs('admin.assets.*') && request('status') === 'fail' ? 'active' : '' }}">
+                        <i class="ri-history-line"></i> Asset History
+                    </a>
+                </li>
             </ul>
         </div>
     </li>

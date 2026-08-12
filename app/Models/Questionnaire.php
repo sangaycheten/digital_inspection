@@ -10,7 +10,7 @@ class Questionnaire extends Model
 {
     use SoftDeletes, HasUuids;
 
-    protected $fillable = ['name', 'key', 'type', 'field_type_id', 'section_id', 'parent_id', 'enabled', 'required', 'status'];
+    protected $fillable = ['name', 'key', 'type', 'field_type_id', 'section_id', 'parent_id', 'condition', 'enabled', 'required', 'status'];
 
     protected $casts = [
         'enabled'  => 'boolean',

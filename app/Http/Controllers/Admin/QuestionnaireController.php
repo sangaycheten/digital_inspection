@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Admin\Master;
+namespace App\Http\Controllers\Admin;
 
 use App\Enums\DataType;
 use App\Http\Controllers\Controller;
@@ -22,12 +22,10 @@ class QuestionnaireController extends Controller
         $fieldTypesForJs = FieldType::where('status', 'active')->orderBy('name')->get()
             ->map(fn($ft) => ['id' => $ft->id, 'name' => $ft->name, 'type' => $ft->type, 'options' => $ft->options ?? []])
             ->values()->all();
-        $parentQuestionnaires = Questionnaire::where('type', '!=', DataType::SubQuestionnaire->value)
-            ->where('status', 'active')->orderBy('name')->get(['id', 'name', 'key']);
         $sections = Section::where('status', 'active')->orderBy('name')->get(['id', 'name']);
 
-        return view('admin.master.questionnaires.create', compact(
-            'typeOptions', 'fieldTypesForJs', 'parentQuestionnaires', 'sections'
+        return view('admin.questionnaires.create', compact(
+            'typeOptions', 'fieldTypesForJs', 'sections'
         ));
     }
 
@@ -37,9 +35,10 @@ class QuestionnaireController extends Controller
         $fieldTypesForJs = FieldType::where('status', 'active')->orderBy('name')->get()
             ->map(fn($ft) => ['id' => $ft->id, 'name' => $ft->name, 'type' => $ft->type, 'options' => $ft->options ?? []])
             ->values()->all();
-        $parentQuestionnaires = Questionnaire::where('type', '!=', DataType::SubQuestionnaire->value)
+        $parentQuestionnaires = Questionnaire::whereNull('deleted_at')
+            ->where('type', '!=', DataType::SubQuestionnaire->value)
             ->where('status', 'active')->where('id', '!=', $questionnaire->id)
-            ->orderBy('name')->get(['id', 'name', 'key']);
+            ->orderBy('name')->get(['id', 'name', 'key', 'type']);
         $sections          = Section::where('status', 'active')->orderBy('name')->get(['id', 'name']);
         $subQuestionnaires = $questionnaire->subQuestionnaires()->orderBy('created_at')->get();
         $subsForJs         = $subQuestionnaires->map(fn($q) => [
@@ -49,12 +48,13 @@ class QuestionnaireController extends Controller
             'type'          => $q->type,
             'field_type_id' => $q->field_type_id ?? '',
             'section_id'    => $q->section_id    ?? '',
+            'condition'     => $q->condition     ?? '',
             'enabled'       => $q->enabled  ? '1' : '0',
             'required'      => $q->required ? '1' : '0',
             'status'        => $q->status,
         ])->values()->all();
 
-        return view('admin.master.questionnaires.edit', compact(
+        return view('admin.questionnaires.edit', compact(
             'questionnaire', 'subQuestionnaires', 'subsForJs',
             'typeOptions', 'fieldTypesForJs', 'parentQuestionnaires', 'sections'
         ));
@@ -75,12 +75,14 @@ class QuestionnaireController extends Controller
         $typeOptions = DataType::valueLabelMap();
         $sections    = Section::where('status', 'active')->orderBy('name')->get(['id', 'name']);
 
-        return view('admin.master.questionnaires.index', compact('questionnaires', 'typeOptions', 'sections'));
+        return view('admin.questionnaires.index', compact('questionnaires', 'typeOptions', 'sections'));
     }
 
     public function store(Request $request): RedirectResponse
     {
-        $types = $request->input('type', []);
+        $types          = $request->input('type', []);
+        $groupSeqs      = $request->input('group_seq', []);
+        $isGroupParents = $request->input('is_group_parent', []);
 
         $perRowRules    = [];
         $customMessages = [];
@@ -88,13 +90,9 @@ class QuestionnaireController extends Controller
         foreach ($types as $i => $type) {
             $num     = $i + 1;
             $needsFt = in_array($type, [DataType::Toggle->value, DataType::OptionList->value]);
-            $isSubQ  = $type === DataType::SubQuestionnaire->value;
 
             $perRowRules["field_type_id.$i"] = $needsFt
                 ? ['required', 'uuid', 'exists:field_types,id']
-                : ['nullable'];
-            $perRowRules["parent_id.$i"] = $isSubQ
-                ? ['required', 'uuid', 'exists:questionnaires,id']
                 : ['nullable'];
 
             $customMessages["name.{$i}.required"]          = "Question #{$num}: Name is required.";
@@ -106,38 +104,70 @@ class QuestionnaireController extends Controller
             $customMessages["type.{$i}.required"]          = "Question #{$num}: Please select a data type.";
             $customMessages["status.{$i}.required"]        = "Question #{$num}: Status is required.";
             $customMessages["field_type_id.{$i}.required"] = "Question #{$num}: Option set is required for this data type.";
-            $customMessages["parent_id.{$i}.required"]     = "Question #{$num}: Parent questionnaire is required for sub-questionnaire type.";
         }
 
         $validated = $request->validate(array_merge([
-            'name'          => ['required', 'array', 'min:1'],
-            'name.*'        => ['required', 'string', 'max:255'],
-            'key'           => ['required', 'array', 'min:1'],
-            'key.*'         => ['required', 'string', 'max:100', 'alpha_dash', 'distinct', 'unique:questionnaires,key'],
-            'type'          => ['required', 'array', 'min:1'],
-            'type.*'        => ['required', new Enum(DataType::class)],
-            'field_type_id' => ['nullable', 'array'],
-            'section_id'    => ['nullable', 'array'],
-            'section_id.*'  => ['nullable', 'uuid', 'exists:sections,id'],
-            'parent_id'     => ['nullable', 'array'],
-            'enabled'       => ['nullable', 'array'],
-            'enabled.*'     => ['nullable', 'in:0,1'],
-            'required'      => ['nullable', 'array'],
-            'required.*'    => ['nullable', 'in:0,1'],
-            'status'        => ['required', 'array', 'min:1'],
-            'status.*'      => ['required', 'in:active,inactive'],
+            'name'            => ['required', 'array', 'min:1'],
+            'name.*'          => ['required', 'string', 'max:255'],
+            'key'             => ['required', 'array', 'min:1'],
+            'key.*'           => ['required', 'string', 'max:100', 'alpha_dash', 'distinct', 'unique:questionnaires,key'],
+            'type'            => ['required', 'array', 'min:1'],
+            'type.*'          => ['required', new Enum(DataType::class)],
+            'field_type_id'   => ['nullable', 'array'],
+            'section_id'      => ['nullable', 'array'],
+            'section_id.*'    => ['nullable', 'uuid', 'exists:sections,id'],
+            'enabled'         => ['nullable', 'array'],
+            'enabled.*'       => ['nullable', 'in:0,1'],
+            'required'        => ['nullable', 'array'],
+            'required.*'      => ['nullable', 'in:0,1'],
+            'status'          => ['required', 'array', 'min:1'],
+            'status.*'        => ['required', 'in:active,inactive'],
+            'is_group_parent' => ['nullable', 'array'],
+            'group_seq'       => ['nullable', 'array'],
         ], $perRowRules), $customMessages);
 
         $count = count($validated['name']);
 
+        // Pass 1 — create standalone questions and group parents; track IDs by group_seq.
+        $groupParentIds = [];
         for ($i = 0; $i < $count; $i++) {
+            $seq      = $validated['group_seq'][$i] ?? '';
+            $isParent = ($validated['is_group_parent'][$i] ?? '0') === '1';
+            if ($seq !== '' && !$isParent) continue; // children handled in pass 2
+
             $q = Questionnaire::create([
                 'name'          => $validated['name'][$i],
                 'key'           => strtolower($validated['key'][$i]),
                 'type'          => $validated['type'][$i],
                 'field_type_id' => $validated['field_type_id'][$i] ?? null,
                 'section_id'    => $validated['section_id'][$i] ?? null,
-                'parent_id'     => $validated['parent_id'][$i] ?? null,
+                'enabled'       => ($validated['enabled'][$i] ?? '0') === '1',
+                'required'      => ($validated['required'][$i] ?? '0') === '1',
+                'status'        => $validated['status'][$i],
+            ]);
+
+            activity()->useLog('master')->causedBy($request->user())
+                ->performedOn($q)->event('created')
+                ->log("Questionnaire created: {$q->name}");
+
+            if ($seq !== '') $groupParentIds[$seq] = $q->id;
+        }
+
+        // Pass 2 — create children, linking to their parent.
+        for ($i = 0; $i < $count; $i++) {
+            $seq      = $validated['group_seq'][$i] ?? '';
+            $isParent = ($validated['is_group_parent'][$i] ?? '0') === '1';
+            if ($seq === '' || $isParent) continue;
+
+            $parentId = $groupParentIds[$seq] ?? null;
+
+            $q = Questionnaire::create([
+                'name'          => $validated['name'][$i],
+                'key'           => strtolower($validated['key'][$i]),
+                'type'          => $validated['type'][$i],
+                'field_type_id' => $validated['field_type_id'][$i] ?? null,
+                'section_id'    => $validated['section_id'][$i] ?? null,
+                'parent_id'     => $parentId,
                 'enabled'       => ($validated['enabled'][$i] ?? '0') === '1',
                 'required'      => ($validated['required'][$i] ?? '0') === '1',
                 'status'        => $validated['status'][$i],
@@ -152,25 +182,26 @@ class QuestionnaireController extends Controller
             ? "Questionnaire \"{$validated['name'][0]}\" created successfully."
             : "{$count} questionnaires created successfully.";
 
-        return redirect()->route('admin.master.questionnaires.index')->with('success', $msg);
+        return redirect()->route('admin.questionnaires.index')->with('success', $msg);
     }
 
     public function update(Request $request, Questionnaire $questionnaire): RedirectResponse
     {
         $needsFieldType = in_array($request->type, [DataType::Toggle->value, DataType::OptionList->value]);
         $isSubQ         = $request->type === DataType::SubQuestionnaire->value;
+        $parentId       = $request->input('parent_id');
+        $parentIsSwitch = $isSubQ && $parentId && Questionnaire::where('id', $parentId)->value('type') === DataType::Toggle->value;
 
         $data = $request->validate([
             'name'          => ['required', 'string', 'max:255'],
             'key'           => ['required', 'string', 'max:100', 'alpha_dash', Rule::unique('questionnaires', 'key')->ignore($questionnaire->id)],
             'type'          => ['required', new Enum(DataType::class)],
-            'field_type_id' => $needsFieldType
-                                ? ['required', 'uuid', 'exists:field_types,id']
-                                : ['nullable'],
+            'field_type_id' => $needsFieldType ? ['required', 'uuid', 'exists:field_types,id'] : ['nullable'],
             'section_id'    => ['nullable', 'uuid', 'exists:sections,id'],
             'parent_id'     => $isSubQ
                                 ? ['required', 'uuid', 'exists:questionnaires,id', Rule::notIn([$questionnaire->id])]
                                 : ['nullable'],
+            'condition'     => $parentIsSwitch ? ['required', 'in:yes,no'] : ['nullable', 'in:yes,no'],
             'status'        => ['required', 'in:active,inactive'],
         ]);
 
@@ -178,6 +209,7 @@ class QuestionnaireController extends Controller
         $data['enabled']   = $request->boolean('enabled');
         $data['required']  = $request->boolean('required');
         $data['parent_id'] = $isSubQ ? ($data['parent_id'] ?? null) : null;
+        $data['condition'] = ($isSubQ && $parentIsSwitch) ? ($data['condition'] ?? null) : null;
 
         $questionnaire->update($data);
 
@@ -185,7 +217,7 @@ class QuestionnaireController extends Controller
             ->performedOn($questionnaire)->event('updated')
             ->log("Questionnaire updated: {$questionnaire->name}");
 
-        return redirect()->route('admin.master.questionnaires.index')
+        return redirect()->route('admin.questionnaires.index')
             ->with('success', "Questionnaire \"{$questionnaire->name}\" updated successfully.");
     }
 
@@ -194,6 +226,7 @@ class QuestionnaireController extends Controller
         $types          = $request->input('type', []);
         $perRowRules    = [];
         $customMessages = [];
+        $parentIsSwitch = $parent->type === DataType::Toggle->value;
 
         foreach ($types as $i => $type) {
             $num     = $i + 1;
@@ -203,6 +236,10 @@ class QuestionnaireController extends Controller
                 ? ['required', 'uuid', 'exists:field_types,id']
                 : ['nullable'];
 
+            $perRowRules["condition.$i"] = $parentIsSwitch
+                ? ['required', 'in:yes,no']
+                : ['nullable', 'in:yes,no'];
+
             $customMessages["name.{$i}.required"]          = "Sub-question #{$num}: Name is required.";
             $customMessages["key.{$i}.required"]           = "Sub-question #{$num}: Key is required.";
             $customMessages["key.{$i}.distinct"]           = "Sub-question #{$num}: Duplicate key — each sub-question must have a unique key.";
@@ -210,30 +247,31 @@ class QuestionnaireController extends Controller
             $customMessages["type.{$i}.required"]          = "Sub-question #{$num}: Please select a data type.";
             $customMessages["status.{$i}.required"]        = "Sub-question #{$num}: Status is required.";
             $customMessages["field_type_id.{$i}.required"] = "Sub-question #{$num}: Option set is required for this data type.";
+            $customMessages["condition.{$i}.required"]     = "Sub-question #{$num}: Condition (Yes/No) is required.";
         }
 
         $validated = $request->validate(array_merge([
-            'sub_id'         => ['nullable', 'array'],
-            'sub_id.*'       => ['nullable', 'uuid'],
-            'name'           => ['required', 'array', 'min:1'],
-            'name.*'         => ['required', 'string', 'max:255'],
-            'key'            => ['required', 'array', 'min:1'],
-            'key.*'          => ['required', 'string', 'max:100', 'alpha_dash', 'distinct'],
-            'type'           => ['required', 'array', 'min:1'],
-            'type.*'         => ['required', new Enum(DataType::class)],
-            'field_type_id'  => ['nullable', 'array'],
-            'section_id'     => ['nullable', 'uuid', 'exists:sections,id'],
-            'enabled'        => ['nullable', 'array'],
-            'enabled.*'      => ['nullable', 'in:0,1'],
-            'required'       => ['nullable', 'array'],
-            'required.*'     => ['nullable', 'in:0,1'],
-            'status'         => ['required', 'array', 'min:1'],
-            'status.*'       => ['required', 'in:active,inactive'],
+            'sub_id'        => ['nullable', 'array'],
+            'sub_id.*'      => ['nullable', 'uuid'],
+            'name'          => ['required', 'array', 'min:1'],
+            'name.*'        => ['required', 'string', 'max:255'],
+            'key'           => ['required', 'array', 'min:1'],
+            'key.*'         => ['required', 'string', 'max:100', 'alpha_dash', 'distinct'],
+            'type'          => ['required', 'array', 'min:1'],
+            'type.*'        => ['required', new Enum(DataType::class)],
+            'field_type_id' => ['nullable', 'array'],
+            'condition'     => ['nullable', 'array'],
+            'section_id'    => ['nullable', 'uuid', 'exists:sections,id'],
+            'enabled'       => ['nullable', 'array'],
+            'enabled.*'     => ['nullable', 'in:0,1'],
+            'required'      => ['nullable', 'array'],
+            'required.*'    => ['nullable', 'in:0,1'],
+            'status'        => ['required', 'array', 'min:1'],
+            'status.*'      => ['required', 'in:active,inactive'],
         ], $perRowRules), $customMessages);
 
         $submittedIds = array_values(array_filter($validated['sub_id'] ?? [], fn($id) => !empty($id)));
 
-        // Delete sub-questions that were removed from the group
         Questionnaire::where('parent_id', $parent->id)
             ->when(!empty($submittedIds), fn($q) => $q->whereNotIn('id', $submittedIds))
             ->delete();
@@ -247,6 +285,7 @@ class QuestionnaireController extends Controller
                 'field_type_id' => $validated['field_type_id'][$i] ?? null,
                 'section_id'    => $validated['section_id'] ?? null,
                 'parent_id'     => $parent->id,
+                'condition'     => $parentIsSwitch ? ($validated['condition'][$i] ?? null) : null,
                 'enabled'       => ($validated['enabled'][$i] ?? '0') === '1',
                 'required'      => ($validated['required'][$i] ?? '0') === '1',
                 'status'        => $validated['status'][$i],
@@ -269,7 +308,7 @@ class QuestionnaireController extends Controller
             }
         }
 
-        return redirect()->route('admin.master.questionnaires.index')
+        return redirect()->route('admin.questionnaires.index')
             ->with('success', "Sub-questionnaires for \"{$parent->name}\" updated successfully.");
     }
 
@@ -286,7 +325,7 @@ class QuestionnaireController extends Controller
             return response()->json(['message' => "Questionnaire \"{$name}\" deleted."]);
         }
 
-        return redirect()->route('admin.master.questionnaires.index')
+        return redirect()->route('admin.questionnaires.index')
             ->with('success', "Questionnaire \"{$name}\" deleted.");
     }
 }

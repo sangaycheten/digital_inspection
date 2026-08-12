@@ -5,7 +5,7 @@ if (! function_exists('role_label')) {
     {
         return match ($roleName) {
             'system-administrator' => 'System Administrator',
-            'manager'              => 'Reviewer and Approver',
+            'manager'              => 'Manager',
             'field-technician'     => 'Field Technician',
             'client-user'          => 'Client User',
             default                => ucwords(str_replace('-', ' ', $roleName)),

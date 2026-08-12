@@ -8,7 +8,7 @@
                 <h4 class="mb-sm-0">Admin Dashboard</h4>
                 <div class="page-title-right">
                     <ol class="breadcrumb m-0">
-                        <li class="breadcrumb-item"><a href="#">Home</a></li>
+                        <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}">Home</a></li>
                         <li class="breadcrumb-item active">Dashboard</li>
                     </ol>
                 </div>
@@ -29,7 +29,7 @@
                     <div class="d-flex align-items-end justify-content-between mt-4">
                         <div>
                             <h4 class="fs-22 fw-semibold ff-secondary mb-4">0</h4>
-                            <a href="#" class="text-decoration-underline">View all jobs</a>
+                            <a href="{{ route('admin.jobs.index') }}" class="text-decoration-underline">View all jobs</a>
                         </div>
                         <div class="avatar-sm flex-shrink-0">
                             <span class="avatar-title bg-primary-subtle rounded fs-3">
@@ -75,7 +75,7 @@
                     <div class="d-flex align-items-end justify-content-between mt-4">
                         <div>
                             <h4 class="fs-22 fw-semibold ff-secondary mb-4">0</h4>
-                            <a href="#" class="text-decoration-underline">View assets</a>
+                            <a href="{{ route('admin.assets.index') }}" class="text-decoration-underline">View assets</a>
                         </div>
                         <div class="avatar-sm flex-shrink-0">
                             <span class="avatar-title bg-warning-subtle rounded fs-3">
