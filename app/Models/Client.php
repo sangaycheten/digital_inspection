@@ -10,7 +10,7 @@ class Client extends Model
 {
     use SoftDeletes, HasUuids;
 
-    protected $fillable = ['name', 'custom_client_code', 'billing_contact_info', 'status'];
+    protected $fillable = ['name', 'custom_client_code', 'billing_contact_info', 'status', 'manager_id', 'logo'];
 
     public function sites(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
@@ -20,5 +20,10 @@ class Client extends Model
     public function users(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(User::class);
+    }
+
+    public function manager(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(User::class, 'manager_id');
     }
 }

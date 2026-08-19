@@ -42,17 +42,29 @@
                     @csrf
                     <div class="card-body">
 
-                        <div class="mb-3" style="max-width:460px;">
-                            <label class="form-label fw-medium">Section</label>
-                            <select id="createSectionId" class="form-select">
-                                <option value="">— No section —</option>
-                                @foreach($sections as $sec)
-                                <option value="{{ $sec->id }}" {{ old('section_id.0') === $sec->id ? 'selected' : '' }}>
-                                    {{ $sec->name }}
-                                </option>
-                                @endforeach
-                            </select>
-                            <div class="form-text">All questions added below will belong to this section.</div>
+                        <div class="row g-3 mb-3" style="max-width:700px;">
+                            <div class="col-md-6">
+                                <label class="form-label fw-medium">Asset Type</label>
+                                <select id="createAssetType" class="form-select">
+                                    <option value="">— Not asset-specific —</option>
+                                    @foreach($assetTypes as $val => $label)
+                                    <option value="{{ $val }}" {{ old('asset_type') === $val ? 'selected' : '' }}>{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                                <div class="form-text">Questions assigned to an asset type appear in the inspection form for that asset.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-medium">Section</label>
+                                <select id="createSectionId" class="form-select">
+                                    <option value="">— No section —</option>
+                                    @foreach($sections as $sec)
+                                    <option value="{{ $sec->id }}" {{ old('section_id.0') === $sec->id ? 'selected' : '' }}>
+                                        {{ $sec->name }}
+                                    </option>
+                                    @endforeach
+                                </select>
+                                <div class="form-text">All questions added below will belong to this section.</div>
+                            </div>
                         </div>
 
                         <hr class="my-3">
@@ -446,9 +458,16 @@
         e.preventDefault();
         const form = this;
         form.querySelectorAll('input[type="hidden"][name$="[]"]').forEach(el => el.remove());
+        form.querySelectorAll('input[type="hidden"][name="asset_type"]').forEach(el => el.remove());
 
-        const payload   = [];
-        const sectionId = document.getElementById('createSectionId').value;
+        const payload    = [];
+        const sectionId  = document.getElementById('createSectionId').value;
+        const assetType  = document.getElementById('createAssetType').value;
+
+        // Add asset_type as a single top-level field
+        const atInput = document.createElement('input');
+        atInput.type = 'hidden'; atInput.name = 'asset_type'; atInput.value = assetType;
+        form.appendChild(atInput);
 
         document.querySelectorAll('#qRowsContainer .q-row').forEach((row, rowIdx) => {
             const type = row.querySelector('.q-type-select').value;

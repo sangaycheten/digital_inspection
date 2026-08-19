@@ -183,7 +183,7 @@
                                                     {{ $ta->asset->asset_code }}
                                                 </a>
                                             </td>
-                                            <td class="fs-13">{{ $ta->asset->asset_type }}</td>
+                                            <td class="fs-13">{{ $assetTypes[$ta->asset->asset_type] ?? $ta->asset->asset_type }}</td>
                                             <td class="fs-13 text-muted">{{ $ta->asset->zone ?? '—' }}</td>
                                             <td>
                                                 @if($ta->completed)

@@ -12,14 +12,7 @@
         'removed'        => 'dark',
         'replaced'       => 'info',
     ];
-    $typeLabels = [
-        'anchor_point' => 'Anchor Point',
-        'static_line'  => 'Static Line',
-        'ladder'       => 'Ladder',
-        'guardrail'    => 'Guardrail',
-        'walkway'      => 'Walkway',
-        'other'        => 'Other',
-    ];
+    $typeLabels = $assetTypes;
     @endphp
 
     <div class="row">

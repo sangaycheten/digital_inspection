@@ -22,8 +22,8 @@
                     <div class="d-flex align-items-end justify-content-between mt-4">
                         <div>
                             <p class="text-uppercase fw-medium text-muted text-truncate mb-1">Pending Review</p>
-                            <h4 class="fs-22 fw-semibold ff-secondary mb-4">0</h4>
-                            <a href="#" class="text-decoration-underline">View inspections</a>
+                            <h4 class="fs-22 fw-semibold ff-secondary mb-4">{{ $pendingCount }}</h4>
+                            <a href="{{ route('reviewer.inspections.index') }}" class="text-decoration-underline">View inspections</a>
                         </div>
                         <div class="avatar-sm flex-shrink-0">
                             <span class="avatar-title bg-warning-subtle rounded fs-3">
@@ -41,8 +41,8 @@
                     <div class="d-flex align-items-end justify-content-between mt-4">
                         <div>
                             <p class="text-uppercase fw-medium text-muted text-truncate mb-1">Approved Today</p>
-                            <h4 class="fs-22 fw-semibold ff-secondary mb-4">0</h4>
-                            <a href="#" class="text-decoration-underline">View approved</a>
+                            <h4 class="fs-22 fw-semibold ff-secondary mb-4">{{ $approvedToday }}</h4>
+                            <a href="{{ route('reviewer.inspections.index', ['status' => 'approved']) }}" class="text-decoration-underline">View approved</a>
                         </div>
                         <div class="avatar-sm flex-shrink-0">
                             <span class="avatar-title bg-success-subtle rounded fs-3">
@@ -79,8 +79,8 @@
                     <div class="d-flex align-items-end justify-content-between mt-4">
                         <div>
                             <p class="text-uppercase fw-medium text-muted text-truncate mb-1">Open Jobs</p>
-                            <h4 class="fs-22 fw-semibold ff-secondary mb-4">0</h4>
-                            <a href="#" class="text-decoration-underline">View jobs</a>
+                            <h4 class="fs-22 fw-semibold ff-secondary mb-4">{{ $openJobs }}</h4>
+                            <a href="{{ route('admin.jobs.index') }}" class="text-decoration-underline">View jobs</a>
                         </div>
                         <div class="avatar-sm flex-shrink-0">
                             <span class="avatar-title bg-primary-subtle rounded fs-3">

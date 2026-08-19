@@ -144,7 +144,7 @@
                             <button type="button" class="btn material-shadow-none" id="page-header-user-dropdown" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                                 <span class="d-flex align-items-center">
                                     <img class="rounded-circle header-profile-user"
-                                         src="{{ Auth::user()->avatar ? Storage::url(Auth::user()->avatar) : asset('assets/images/users/avatar-1.jpg') }}"
+                                         src="{{ Auth::user()->avatar ? Storage::disk('public')->url(Auth::user()->avatar) : asset('assets/images/users/avatar-1.jpg') }}"
                                          alt="Header Avatar">
                                     <span class="text-start ms-xl-2">
                                         <span class="d-none d-xl-inline-block ms-1 fw-medium user-name-text">{{ Auth::user()->name }}</span>
@@ -211,7 +211,7 @@
                 <button type="button" class="btn material-shadow-none" id="sidebar-user-dropdown" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                     <span class="d-flex align-items-center gap-2">
                         <img class="rounded header-profile-user"
-                             src="{{ Auth::user()->avatar ? Storage::url(Auth::user()->avatar) : asset('assets/images/users/avatar-1.jpg') }}"
+                             src="{{ Auth::user()->avatar ? Storage::disk('public')->url(Auth::user()->avatar) : asset('assets/images/users/avatar-1.jpg') }}"
                              alt="Avatar">
                         <span class="text-start">
                             <span class="d-block fw-medium sidebar-user-name-text">{{ Auth::user()->name }}</span>

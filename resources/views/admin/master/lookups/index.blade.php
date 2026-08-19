@@ -1,15 +1,15 @@
 <x-app-layout>
-    <x-slot name="title">Master Lookups</x-slot>
+    <x-slot name="title">Reference Data</x-slot>
 
     <div class="row">
         <div class="col-12">
             <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                <h4 class="mb-sm-0">Master Lookups</h4>
+                <h4 class="mb-sm-0">Reference Data</h4>
                 <div class="page-title-right">
                     <ol class="breadcrumb m-0">
                         <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}">Home</a></li>
                         <li class="breadcrumb-item">Master</li>
-                        <li class="breadcrumb-item active">Lookups</li>
+                        <li class="breadcrumb-item active">Reference Data</li>
                     </ol>
                 </div>
             </div>
@@ -114,6 +114,7 @@
                                         </span>
                                     </td>
                                     <td class="fw-medium">{{ $lookup->label }}</td>
+                                    <td class="text-muted font-monospace fs-12">{{ $lookup->value ?? '—' }}</td>
                                     <td class="text-muted">{{ $lookup->sort_order }}</td>
                                     <td>
                                         <div class="hstack gap-1">
@@ -149,6 +150,14 @@
                                                             <div class="mb-3">
                                                                 <label class="form-label">Label <span class="text-danger">*</span></label>
                                                                 <input type="text" name="label" class="form-control" value="{{ $lookup->label }}" required>
+                                                            </div>
+                                                            <div class="mb-3">
+                                                                <label class="form-label">Value (slug)
+                                                                    <span class="text-muted fs-12">— stored in records, e.g. anchor_point</span>
+                                                                </label>
+                                                                <input type="text" name="value" class="form-control font-monospace"
+                                                                       value="{{ $lookup->value }}"
+                                                                       placeholder="e.g. anchor_point">
                                                             </div>
                                                             <div class="mb-3">
                                                                 <label class="form-label">Sort Order</label>
@@ -232,8 +241,16 @@
                         <div class="mb-3">
                             <label class="form-label">Label <span class="text-danger">*</span></label>
                             <input type="text" name="label" class="form-control @error('label') is-invalid @enderror"
-                                   value="{{ old('label') }}" required placeholder="e.g. anchor_point">
+                                   value="{{ old('label') }}" required placeholder="e.g. Anchor Point">
                             @error('label')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Value (slug)
+                                <span class="text-muted fs-12">— stored in records, e.g. anchor_point</span>
+                            </label>
+                            <input type="text" name="value" class="form-control font-monospace @error('value') is-invalid @enderror"
+                                   value="{{ old('value') }}" placeholder="e.g. anchor_point">
+                            @error('value')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Sort Order</label>

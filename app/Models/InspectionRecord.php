@@ -72,4 +72,9 @@ class InspectionRecord extends Model
     {
         return $this->belongsTo(InspectionRecord::class, 'previous_inspection_id');
     }
+
+    public function answers(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(InspectionAnswer::class);
+    }
 }

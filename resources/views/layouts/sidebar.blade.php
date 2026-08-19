@@ -92,7 +92,7 @@
                 <li class="nav-item">
                     <a href="{{ route('admin.master.lookups.index') }}"
                        class="nav-link {{ request()->routeIs('admin.master.lookups.*') ? 'active' : '' }}">
-                        <i class="ri-list-check-2"></i> Lookups
+                        <i class="ri-list-check-2"></i> Reference Data
                     </a>
                 </li>
                 <li class="nav-item">
@@ -105,6 +105,12 @@
                     <a href="{{ route('admin.master.data-types.index') }}"
                        class="nav-link {{ request()->routeIs('admin.master.data-types.*') ? 'active' : '' }}">
                         <i class="ri-list-settings-line"></i> Data Types
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="{{ route('admin.master.hierarchy.index') }}"
+                       class="nav-link {{ request()->routeIs('admin.master.hierarchy.*') ? 'active' : '' }}">
+                        <i class="ri-git-branch-line"></i> Hierarchy
                     </a>
                 </li>
             </ul>
@@ -239,16 +245,28 @@
         </div>
     </li>
 
+    @php $inspectionsRActive = request()->routeIs('reviewer.inspections.*'); @endphp
     <li class="nav-item">
-        <a class="nav-link menu-link collapsed" href="#sidebarInspectionsR" data-bs-toggle="collapse" role="button"
-           aria-expanded="false" aria-controls="sidebarInspectionsR">
+        <a class="nav-link menu-link {{ $inspectionsRActive ? '' : 'collapsed' }}" href="#sidebarInspectionsR"
+           data-bs-toggle="collapse" role="button"
+           aria-expanded="{{ $inspectionsRActive ? 'true' : 'false' }}"
+           aria-controls="sidebarInspectionsR">
             <i class="ri-survey-line"></i><span>Inspections</span>
         </a>
-        <div class="collapse menu-dropdown" id="sidebarInspectionsR">
+        <div class="collapse menu-dropdown {{ $inspectionsRActive ? 'show' : '' }}" id="sidebarInspectionsR">
             <ul class="nav nav-sm flex-column">
-                <li class="nav-item"><a href="#" class="nav-link">Review Inspections</a></li>
-                <li class="nav-item"><a href="#" class="nav-link">Re-Inspections</a></li>
-                <li class="nav-item"><a href="#" class="nav-link">Installations</a></li>
+                <li class="nav-item">
+                    <a href="{{ route('reviewer.inspections.index') }}"
+                       class="nav-link {{ request()->routeIs('reviewer.inspections.*') && request('status', 'draft') === 'draft' ? 'active' : '' }}">
+                        <i class="ri-time-line me-1"></i>Pending Review
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="{{ route('reviewer.inspections.index', ['status' => 'approved']) }}"
+                       class="nav-link {{ request()->routeIs('reviewer.inspections.index') && request('status') === 'approved' ? 'active' : '' }}">
+                        <i class="ri-checkbox-circle-line me-1"></i>Approved
+                    </a>
+                </li>
             </ul>
         </div>
     </li>
@@ -309,21 +327,34 @@
     <li class="menu-title"><span>My Work</span></li>
 
     <li class="nav-item">
-        <a class="nav-link menu-link" href="#">
+        <a class="nav-link menu-link {{ request()->routeIs('technician.jobs.*') ? 'active' : '' }}"
+           href="{{ route('technician.jobs.index') }}">
             <i class="ri-briefcase-line"></i><span>My Jobs</span>
         </a>
     </li>
 
     <li class="nav-item">
-        <a class="nav-link menu-link collapsed" href="#sidebarCapture" data-bs-toggle="collapse" role="button"
-           aria-expanded="false" aria-controls="sidebarCapture">
+        <a class="nav-link menu-link {{ request()->routeIs('technician.jobs.inspect*', 'technician.jobs.install*') ? '' : 'collapsed' }}"
+           href="#sidebarCapture" data-bs-toggle="collapse" role="button"
+           aria-expanded="{{ request()->routeIs('technician.jobs.inspect*', 'technician.jobs.install*') ? 'true' : 'false' }}"
+           aria-controls="sidebarCapture">
             <i class="ri-survey-line"></i><span>Capture</span>
         </a>
-        <div class="collapse menu-dropdown" id="sidebarCapture">
+        <div class="collapse menu-dropdown {{ request()->routeIs('technician.jobs.inspect*', 'technician.jobs.install*') ? 'show' : '' }}"
+             id="sidebarCapture">
             <ul class="nav nav-sm flex-column">
-                <li class="nav-item"><a href="#" class="nav-link">First Inspection</a></li>
-                <li class="nav-item"><a href="#" class="nav-link">Re-Inspection</a></li>
-                <li class="nav-item"><a href="#" class="nav-link">Installation / Rectification</a></li>
+                <li class="nav-item">
+                    <a href="{{ route('technician.jobs.index', ['work_type' => 'first_inspection', 'status' => 'in_progress']) }}"
+                       class="nav-link">First Inspection</a>
+                </li>
+                <li class="nav-item">
+                    <a href="{{ route('technician.jobs.index', ['work_type' => 're_inspection', 'status' => 'in_progress']) }}"
+                       class="nav-link">Re-Inspection</a>
+                </li>
+                <li class="nav-item">
+                    <a href="{{ route('technician.jobs.index', ['work_type' => 'installation', 'status' => 'in_progress']) }}"
+                       class="nav-link">Installation / Rectification</a>
+                </li>
             </ul>
         </div>
     </li>

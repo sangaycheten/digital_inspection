@@ -20,7 +20,7 @@
         <label class="form-label d-block">Profile Picture</label>
         <div class="d-flex align-items-center gap-3">
             <img id="avatar-preview"
-                 src="{{ $user->avatar ? Storage::url($user->avatar) : asset('assets/images/users/avatar-1.jpg') }}"
+                 src="{{ $user->avatar ? Storage::disk('public')->url($user->avatar) : asset('assets/images/users/avatar-1.jpg') }}"
                  alt="Avatar"
                  class="rounded-circle"
                  style="width:80px;height:80px;object-fit:cover;">

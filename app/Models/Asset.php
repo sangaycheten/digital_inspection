@@ -12,14 +12,8 @@ class Asset extends Model
 {
     use HasUuids, LogsActivity;
 
-    const TYPES = [
-        'anchor_point',
-        'static_line',
-        'ladder',
-        'guardrail',
-        'walkway',
-        'other',
-    ];
+    // Asset types are managed in master_lookups (category: asset_type).
+    // Use MasterLookup::assetTypeMap() for dropdowns and Rule::exists for validation.
 
     const STATUSES = [
         'pass',

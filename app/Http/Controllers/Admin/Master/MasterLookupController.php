@@ -28,6 +28,8 @@ class MasterLookupController extends Controller
     {
         $data = $request->validate([
             'category'   => ['required', 'in:asset_type,defect_reason,recommendation'],
+            'value'      => ['nullable', 'string', 'max:100', 'alpha_dash',
+                             'unique:master_lookups,value,NULL,id,category,' . $request->category],
             'label'      => ['required', 'string', 'max:255'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
         ]);
@@ -48,6 +50,8 @@ class MasterLookupController extends Controller
     {
         $data = $request->validate([
             'category'   => ['required', 'in:asset_type,defect_reason,recommendation'],
+            'value'      => ['nullable', 'string', 'max:100', 'alpha_dash',
+                             'unique:master_lookups,value,' . $lookup->id . ',id,category,' . $request->category],
             'label'      => ['required', 'string', 'max:255'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
         ]);

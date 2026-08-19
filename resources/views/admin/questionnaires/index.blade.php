@@ -46,6 +46,15 @@
                                    value="{{ request('search') }}">
                         </div>
                         <div class="col-md-2">
+                            <label class="form-label text-muted fs-12 mb-1">Asset Type</label>
+                            <select name="asset_type" class="form-select form-select-sm">
+                                <option value="">All Asset Types</option>
+                                @foreach($assetTypes as $val => $label)
+                                <option value="{{ $val }}" {{ request('asset_type') === $val ? 'selected' : '' }}>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-2">
                             <label class="form-label text-muted fs-12 mb-1">Section</label>
                             <select name="section_id" class="form-select form-select-sm">
                                 <option value="">All Sections</option>
@@ -92,6 +101,7 @@
                                     <th class="ps-3" style="width:50px;">#</th>
                                     <th>Question Name</th>
                                     <th style="width:160px;">Key</th>
+                                    <th style="width:130px;">Asset Type</th>
                                     <th>Data Type</th>
                                     <th style="width:80px;">Enabled</th>
                                     <th style="width:90px;">Required</th>
@@ -133,6 +143,13 @@
                                         @endif
                                     </td>
                                     <td><span class="badge bg-light text-dark font-monospace">{{ $q->key }}</span></td>
+                                    <td>
+                                        @if($q->asset_type)
+                                        <span class="badge bg-info-subtle text-info">{{ $assetTypes[$q->asset_type] ?? $q->asset_type }}</span>
+                                        @else
+                                        <span class="text-muted fs-12">—</span>
+                                        @endif
+                                    </td>
                                     <td>
                                         @if($q->subQuestionnaires->isNotEmpty())
                                         <span class="badge bg-danger-subtle text-danger">Sub-Questionnaire</span>
@@ -203,7 +220,7 @@
                                 </tr>
                                 @empty
                                 <tr>
-                                    <td colspan="9" class="text-center text-muted py-5">
+                                    <td colspan="10" class="text-center text-muted py-5">
                                         <i class="ri-questionnaire-line fs-24 d-block mb-2"></i>No questionnaires found.
                                     </td>
                                 </tr>

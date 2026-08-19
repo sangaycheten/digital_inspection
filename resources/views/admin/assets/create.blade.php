@@ -16,8 +16,10 @@
         </div>
     </div>
 
-    <form method="POST" action="{{ route('admin.assets.store') }}">
+    <form method="POST" action="{{ route('admin.assets.store') }}" id="assetForm">
         @csrf
+        <input type="hidden" name="mode" id="modeInput" value="{{ old('mode', 'single') }}">
+
         <div class="row g-3">
 
             {{-- Left column --}}
@@ -37,7 +39,6 @@
                                     <option value="">— Select Site —</option>
                                     @foreach($sites as $site)
                                     <option value="{{ $site->id }}"
-                                        data-client="{{ $site->client->name ?? '' }}"
                                         {{ old('site_id') == $site->id ? 'selected' : '' }}>
                                         {{ $site->name ?? $site->address }}
                                         @if($site->client) ({{ $site->client->name }}) @endif
@@ -67,43 +68,96 @@
 
                 {{-- Asset Identity --}}
                 <div class="card mb-3">
-                    <div class="card-header">
+                    <div class="card-header d-flex align-items-center justify-content-between">
                         <h6 class="card-title mb-0"><i class="ri-barcode-line me-2 text-primary"></i>Asset Identity</h6>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <input type="radio" class="btn-check" name="mode_ui" id="modeSingle" autocomplete="off"
+                                   {{ old('mode', 'single') === 'single' ? 'checked' : '' }}
+                                   onchange="setMode('single')">
+                            <label class="btn btn-outline-primary" for="modeSingle">
+                                <i class="ri-file-line me-1"></i>Single
+                            </label>
+                            <input type="radio" class="btn-check" name="mode_ui" id="modeRange" autocomplete="off"
+                                   {{ old('mode') === 'range' ? 'checked' : '' }}
+                                   onchange="setMode('range')">
+                            <label class="btn btn-outline-primary" for="modeRange">
+                                <i class="ri-list-check me-1"></i>Range
+                            </label>
+                        </div>
                     </div>
                     <div class="card-body">
                         <div class="row g-3">
-                            <div class="col-md-4">
+
+                            {{-- Single mode: asset_code + group_id --}}
+                            <div class="col-md-4 single-only">
                                 <label class="form-label">Asset Code <span class="text-danger">*</span></label>
                                 <input type="text" name="asset_code"
                                        class="form-control @error('asset_code') is-invalid @enderror"
-                                       value="{{ old('asset_code') }}" placeholder="e.g. AP01" required>
+                                       value="{{ old('asset_code') }}" placeholder="e.g. AP01">
                                 <div class="form-text">Must be unique within the selected site.</div>
                                 @error('asset_code')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             </div>
+                            <div class="col-md-4 single-only">
+                                <label class="form-label">Group ID
+                                    <span class="text-muted fs-11"><i class="ri-information-line"
+                                        title="Optional: links assets from the same batch"></i></span>
+                                </label>
+                                <input type="text" name="group_id"
+                                       class="form-control @error('group_id') is-invalid @enderror"
+                                       value="{{ old('group_id') }}" placeholder="Optional">
+                                @error('group_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+
+                            {{-- Range mode: prefix / start / end / quantity / indicator --}}
+                            <div class="col-md-3 range-only">
+                                <label class="form-label">Prefix <span class="text-danger">*</span></label>
+                                <input type="text" name="prefix" id="rangePrefix"
+                                       class="form-control @error('prefix') is-invalid @enderror"
+                                       value="{{ old('prefix') }}" placeholder="e.g. AP"
+                                       oninput="updateIndicator()">
+                                @error('prefix')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+                            <div class="col-md-2 range-only">
+                                <label class="form-label">Start <span class="text-danger">*</span></label>
+                                <input type="text" name="range_start" id="rangeStart" inputmode="numeric"
+                                       class="form-control @error('range_start') is-invalid @enderror"
+                                       value="{{ old('range_start') }}" placeholder="01"
+                                       oninput="recalcRange()">
+                                @error('range_start')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+                            <div class="col-md-2 range-only">
+                                <label class="form-label">End <span class="text-danger">*</span></label>
+                                <input type="text" name="range_end" id="rangeEnd" inputmode="numeric"
+                                       class="form-control @error('range_end') is-invalid @enderror"
+                                       value="{{ old('range_end') }}" placeholder="06"
+                                       oninput="recalcRange()">
+                                @error('range_end')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+                            <div class="col-md-2 range-only">
+                                <label class="form-label">Quantity <span class="text-danger">*</span></label>
+                                <input type="number" name="quantity" id="quantity"
+                                       class="form-control @error('quantity') is-invalid @enderror"
+                                       value="{{ old('quantity') }}" placeholder="6" min="1"
+                                       oninput="validateRange()">
+                                @error('quantity')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+                            <div class="col-md-3 range-only d-flex align-items-end pb-1">
+                                <div id="rangeIndicator" class="fs-13 lh-sm"></div>
+                            </div>
+
+                            {{-- Asset Type (both modes) --}}
                             <div class="col-md-4">
                                 <label class="form-label">Asset Type <span class="text-danger">*</span></label>
                                 <select name="asset_type"
                                         class="form-select @error('asset_type') is-invalid @enderror" required>
                                     <option value="">— Select Type —</option>
-                                    <option value="anchor_point"  {{ old('asset_type') == 'anchor_point'  ? 'selected' : '' }}>Anchor Point</option>
-                                    <option value="static_line"   {{ old('asset_type') == 'static_line'   ? 'selected' : '' }}>Static Line</option>
-                                    <option value="ladder"        {{ old('asset_type') == 'ladder'        ? 'selected' : '' }}>Ladder</option>
-                                    <option value="guardrail"     {{ old('asset_type') == 'guardrail'     ? 'selected' : '' }}>Guardrail</option>
-                                    <option value="walkway"       {{ old('asset_type') == 'walkway'       ? 'selected' : '' }}>Walkway</option>
-                                    <option value="other"         {{ old('asset_type') == 'other'         ? 'selected' : '' }}>Other</option>
+                                    @foreach($assetTypes as $val => $label)
+                                    <option value="{{ $val }}" {{ old('asset_type') == $val ? 'selected' : '' }}>
+                                        {{ $label }}
+                                    </option>
+                                    @endforeach
                                 </select>
                                 @error('asset_type')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">Group ID
-                                    <span class="text-muted fs-11" title="Links assets created from the same grouped entry (e.g. AP01–AP06)">
-                                        <i class="ri-information-line"></i>
-                                    </span>
-                                </label>
-                                <input type="text" name="group_id"
-                                       class="form-control @error('group_id') is-invalid @enderror"
-                                       value="{{ old('group_id') }}" placeholder="UUID (optional)">
-                                @error('group_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             </div>
                         </div>
                     </div>
@@ -130,7 +184,7 @@
                                        value="{{ old('model') }}" placeholder="Model number">
                                 @error('model')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-4 single-only">
                                 <label class="form-label">Serial / Batch No.</label>
                                 <input type="text" name="serial_or_batch"
                                        class="form-control @error('serial_or_batch') is-invalid @enderror"
@@ -183,8 +237,8 @@
                     </div>
                 </div>
 
-                {{-- Replacement --}}
-                <div class="card mb-3">
+                {{-- Replacement (single mode only) --}}
+                <div class="card mb-3 single-only">
                     <div class="card-header">
                         <h6 class="card-title mb-0"><i class="ri-arrow-left-right-line me-2 text-primary"></i>Replacement</h6>
                     </div>
@@ -206,8 +260,8 @@
 
                 {{-- Actions --}}
                 <div class="d-flex gap-2">
-                    <button type="submit" class="btn btn-primary flex-grow-1">
-                        <i class="ri-save-line me-1"></i> Create Asset
+                    <button type="submit" id="submitBtn" class="btn btn-primary flex-grow-1">
+                        <i class="ri-save-line me-1"></i><span id="submitLabel">Create Asset</span>
                     </button>
                     <a href="{{ route('admin.assets.index') }}" class="btn btn-light">Cancel</a>
                 </div>
@@ -223,14 +277,12 @@
             ->groupBy('site_id')
             ->map(fn ($b) => $b->values())
     );
-
     const oldBuildingId = '{{ old('building_id') }}';
 
     function loadBuildings(siteId, selectedId) {
         const sel = document.getElementById('buildingSelect');
         sel.innerHTML = '<option value="">— Select Building —</option>';
-        const buildings = buildingsBySite[siteId] || [];
-        buildings.forEach(function (b) {
+        (buildingsBySite[siteId] || []).forEach(b => {
             const opt = document.createElement('option');
             opt.value = b.id;
             opt.textContent = b.name_or_level;
@@ -243,9 +295,94 @@
         loadBuildings(this.value, null);
     });
 
-    // Pre-populate on validation error re-render
     const initSite = document.getElementById('siteSelect').value;
     if (initSite) loadBuildings(initSite, oldBuildingId);
+
+    // ── Mode toggle ──────────────────────────────────────────────────────────
+
+    function setMode(mode) {
+        document.getElementById('modeInput').value = mode;
+
+        document.querySelectorAll('.single-only').forEach(el => {
+            el.style.display = mode === 'single' ? '' : 'none';
+        });
+        document.querySelectorAll('.range-only').forEach(el => {
+            el.style.display = mode === 'range' ? '' : 'none';
+        });
+
+        if (mode === 'range') {
+            validateRange();
+        } else {
+            document.getElementById('submitBtn').disabled = false;
+            document.getElementById('submitLabel').textContent = 'Create Asset';
+        }
+    }
+
+    // ── Range validation ─────────────────────────────────────────────────────
+
+    function recalcRange() {
+        const startRaw = document.getElementById('rangeStart').value.trim();
+        const endRaw   = document.getElementById('rangeEnd').value.trim();
+        const start    = parseInt(startRaw, 10);
+        const end      = parseInt(endRaw, 10);
+        const qtyField = document.getElementById('quantity');
+
+        if (!isNaN(start) && !isNaN(end) && end >= start) {
+            qtyField.value = end - start + 1;
+        } else {
+            qtyField.value = '';
+        }
+        validateRange();
+    }
+
+    function updateIndicator() {
+        validateRange();
+    }
+
+    function validateRange() {
+        const mode = document.getElementById('modeInput').value;
+        if (mode !== 'range') return;
+
+        const startRaw = document.getElementById('rangeStart').value.trim();
+        const endRaw   = document.getElementById('rangeEnd').value.trim();
+        const start    = parseInt(startRaw, 10);
+        const end      = parseInt(endRaw, 10);
+        const qty      = parseInt(document.getElementById('quantity').value, 10);
+        const prefix   = document.getElementById('rangePrefix').value.trim();
+        const indicator = document.getElementById('rangeIndicator');
+        const btn       = document.getElementById('submitBtn');
+
+        if (isNaN(start) || isNaN(end) || isNaN(qty)) {
+            indicator.innerHTML = '';
+            btn.disabled = true;
+            return;
+        }
+
+        if (end < start) {
+            indicator.innerHTML = '<span class="text-danger"><i class="ri-error-warning-line"></i> End must be ≥ Start</span>';
+            btn.disabled = true;
+            return;
+        }
+
+        const expected = end - start + 1;
+        const padLen   = endRaw.length;
+        const pad      = n => String(n).padStart(padLen, '0');
+
+        if (qty !== expected) {
+            indicator.innerHTML = `<span class="text-danger"><i class="ri-error-warning-line"></i> Quantity must be ${expected}</span>`;
+            btn.disabled = true;
+            return;
+        }
+
+        const first = (prefix || '') + pad(start);
+        const last  = (prefix || '') + pad(end);
+        indicator.innerHTML = `<span class="text-success"><i class="ri-check-line"></i> ${first}–${last}</span>`;
+        document.getElementById('submitLabel').textContent = `Create ${expected} Assets`;
+        btn.disabled = false;
+    }
+
+    // ── Init on page load (handles validation-error re-render) ───────────────
+    setMode(document.getElementById('modeInput').value);
     </script>
     @endpush
 
