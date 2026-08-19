@@ -97,12 +97,9 @@
                                 <select name="asset_type"
                                         class="form-select @error('asset_type') is-invalid @enderror" required>
                                     <option value="">— Select Type —</option>
-                                    <option value="anchor_point"  {{ old('asset_type', $asset->asset_type) == 'anchor_point'  ? 'selected' : '' }}>Anchor Point</option>
-                                    <option value="static_line"   {{ old('asset_type', $asset->asset_type) == 'static_line'   ? 'selected' : '' }}>Static Line</option>
-                                    <option value="ladder"        {{ old('asset_type', $asset->asset_type) == 'ladder'        ? 'selected' : '' }}>Ladder</option>
-                                    <option value="guardrail"     {{ old('asset_type', $asset->asset_type) == 'guardrail'     ? 'selected' : '' }}>Guardrail</option>
-                                    <option value="walkway"       {{ old('asset_type', $asset->asset_type) == 'walkway'       ? 'selected' : '' }}>Walkway</option>
-                                    <option value="other"         {{ old('asset_type', $asset->asset_type) == 'other'         ? 'selected' : '' }}>Other</option>
+                                    @foreach($assetTypes as $val => $label)
+                                    <option value="{{ $val }}" {{ old('asset_type', $asset->asset_type) == $val ? 'selected' : '' }}>{{ $label }}</option>
+                                    @endforeach
                                 </select>
                                 @error('asset_type')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             </div>

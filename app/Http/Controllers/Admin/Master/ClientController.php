@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Client;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 class ClientController extends Controller
@@ -28,13 +29,19 @@ class ClientController extends Controller
             'custom_client_code'   => ['required', 'string', 'max:20', 'unique:clients,custom_client_code'],
             'billing_contact_info' => ['nullable', 'string'],
             'status'               => ['required', 'in:active,inactive'],
+            'logo'                 => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,svg', 'max:2048'],
         ]);
+
+        if ($request->hasFile('logo')) {
+            $data['logo'] = $request->file('logo')->store('client-logos', 'public');
+        } else {
+            unset($data['logo']);
+        }
 
         $client = Client::create($data);
 
-        activity()->useLog('master')->causedBy(request()->user())
+        activity()->useLog('master')->causedBy($request->user())
             ->performedOn($client)->event('created')
-            ->withProperties(['attributes' => $data])
             ->log("Client created: {$client->name}");
 
         return redirect()->route('admin.master.clients.index')
@@ -48,11 +55,21 @@ class ClientController extends Controller
             'custom_client_code'   => ['required', 'string', 'max:20', "unique:clients,custom_client_code,{$client->id}"],
             'billing_contact_info' => ['nullable', 'string'],
             'status'               => ['required', 'in:active,inactive'],
+            'logo'                 => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,svg', 'max:2048'],
         ]);
+
+        if ($request->hasFile('logo')) {
+            if ($client->logo) {
+                Storage::disk('public')->delete($client->logo);
+            }
+            $data['logo'] = $request->file('logo')->store('client-logos', 'public');
+        } else {
+            unset($data['logo']);
+        }
 
         $client->update($data);
 
-        activity()->useLog('master')->causedBy(request()->user())
+        activity()->useLog('master')->causedBy($request->user())
             ->performedOn($client)->event('updated')
             ->log("Client updated: {$client->name}");
 
@@ -62,6 +79,10 @@ class ClientController extends Controller
 
     public function destroy(Client $client): RedirectResponse
     {
+        if ($client->logo) {
+            Storage::disk('public')->delete($client->logo);
+        }
+
         $name = $client->name;
         $client->delete();
 

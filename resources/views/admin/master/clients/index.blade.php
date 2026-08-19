@@ -1,3 +1,4 @@
+@use('Illuminate\Support\Facades\Storage')
 <x-app-layout>
     <x-slot name="title">Clients</x-slot>
 
@@ -70,6 +71,7 @@
                             <thead class="table-light">
                                 <tr>
                                     <th class="ps-3">#</th>
+                                    <th style="width:48px;"></th>
                                     <th>Client Name</th>
                                     <th>Code</th>
                                     <th>Billing Contact</th>
@@ -83,6 +85,19 @@
                                 @forelse($clients as $client)
                                 <tr>
                                     <td class="ps-3 text-muted fs-12">{{ $clients->firstItem() + $loop->index }}</td>
+                                    <td>
+                                        @if($client->logo)
+                                        <img src="{{ Storage::disk('public')->url($client->logo) }}"
+                                             alt="{{ $client->name }}"
+                                             class="rounded border"
+                                             style="width:36px;height:36px;object-fit:contain;background:#f8f9fa;padding:2px;">
+                                        @else
+                                        <span class="avatar-title rounded bg-primary-subtle text-primary fs-16 d-inline-flex align-items-center justify-content-center"
+                                              style="width:36px;height:36px;">
+                                            <i class="ri-building-2-line"></i>
+                                        </span>
+                                        @endif
+                                    </td>
                                     <td class="fw-medium">{{ $client->name }}</td>
                                     <td><span class="badge bg-light text-dark">{{ $client->custom_client_code }}</span></td>
                                     <td class="text-muted fs-12">{{ Str::limit($client->billing_contact_info, 40) ?? '—' }}</td>
@@ -115,9 +130,31 @@
                                                         <h5 class="modal-title">Edit Client</h5>
                                                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                                     </div>
-                                                    <form method="POST" action="{{ route('admin.master.clients.update', $client) }}">
+                                                    <form method="POST" action="{{ route('admin.master.clients.update', $client) }}"
+                                                          enctype="multipart/form-data">
                                                         @csrf @method('PUT')
                                                         <div class="modal-body">
+
+                                                            {{-- Logo --}}
+                                                            <div class="mb-3">
+                                                                <label class="form-label">Client Logo</label>
+                                                                <div class="d-flex align-items-center gap-3">
+                                                                    <img id="editLogoPreview{{ $client->id }}"
+                                                                         src="{{ $client->logo ? Storage::disk('public')->url($client->logo) : '' }}"
+                                                                         alt="Logo"
+                                                                         class="rounded border"
+                                                                         style="width:64px;height:64px;object-fit:contain;background:#f8f9fa;padding:4px;{{ $client->logo ? '' : 'display:none;' }}">
+                                                                    <div class="flex-grow-1">
+                                                                        <input type="file"
+                                                                               name="logo"
+                                                                               class="form-control form-control-sm"
+                                                                               accept="image/jpeg,image/png,image/webp,image/svg+xml"
+                                                                               onchange="previewLogo(this, 'editLogoPreview{{ $client->id }}')">
+                                                                        <div class="form-text">Leave blank to keep current logo. JPG, PNG, WebP or SVG · max 2 MB</div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
                                                             <div class="mb-3">
                                                                 <label class="form-label">Client Name <span class="text-danger">*</span></label>
                                                                 <input type="text" name="name" class="form-control" value="{{ $client->name }}" required>
@@ -175,7 +212,7 @@
                                 </tr>
                                 @empty
                                 <tr>
-                                    <td colspan="8" class="text-center text-muted py-5">
+                                    <td colspan="9" class="text-center text-muted py-5">
                                         <i class="ri-building-2-line fs-24 d-block mb-2"></i>No clients found.
                                     </td>
                                 </tr>
@@ -200,9 +237,30 @@
                     <h5 class="modal-title"><i class="ri-building-2-line me-2"></i>Add New Client</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <form method="POST" action="{{ route('admin.master.clients.store') }}">
+                <form method="POST" action="{{ route('admin.master.clients.store') }}" enctype="multipart/form-data">
                     @csrf
                     <div class="modal-body">
+
+                        {{-- Logo upload --}}
+                        <div class="mb-3">
+                            <label class="form-label">Client Logo</label>
+                            <div class="d-flex align-items-center gap-3">
+                                <img id="createLogoPreview"
+                                     src="{{ asset('assets/images/users/avatar-1.jpg') }}"
+                                     alt="Logo Preview"
+                                     class="rounded border"
+                                     style="width:64px;height:64px;object-fit:contain;background:#f8f9fa;padding:4px;display:none;">
+                                <div class="flex-grow-1">
+                                    <input type="file" name="logo" id="createLogoInput"
+                                           class="form-control @error('logo') is-invalid @enderror"
+                                           accept="image/jpeg,image/png,image/webp,image/svg+xml"
+                                           onchange="previewLogo(this, 'createLogoPreview')">
+                                    <div class="form-text">JPG, PNG, WebP or SVG · max 2 MB</div>
+                                    @error('logo')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="mb-3">
                             <label class="form-label">Client Name <span class="text-danger">*</span></label>
                             <input type="text" name="name" class="form-control @error('name') is-invalid @enderror"
@@ -240,7 +298,19 @@
 
     @push('scripts')
     <script>
-    @if($errors->has('name') || $errors->has('custom_client_code') || $errors->has('status'))
+    function previewLogo(input, previewId) {
+        const preview = document.getElementById(previewId);
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            reader.onload = e => {
+                preview.src = e.target.result;
+                preview.style.display = '';
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    @if($errors->has('name') || $errors->has('custom_client_code') || $errors->has('status') || $errors->has('logo'))
     document.addEventListener('DOMContentLoaded', function () {
         new bootstrap.Modal(document.getElementById('createClientModal')).show();
     });

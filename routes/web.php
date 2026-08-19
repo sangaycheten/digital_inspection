@@ -1,6 +1,9 @@
 <?php
 
 use App\Http\Controllers\Admin\AssetController;
+use App\Http\Controllers\Reviewer\InspectionController as ReviewerInspectionController;
+use App\Http\Controllers\Technician\CaptureController as TechnicianCaptureController;
+use App\Http\Controllers\Technician\JobController as TechnicianJobController;
 use App\Http\Controllers\Admin\JobController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\Master\BuildingController;
@@ -8,6 +11,7 @@ use App\Http\Controllers\Admin\Master\ClientController;
 use App\Http\Controllers\Admin\Master\MasterLookupController;
 use App\Http\Controllers\Admin\Master\DataTypeController;
 use App\Http\Controllers\Admin\Master\SectionController;
+use App\Http\Controllers\Admin\Master\HierarchyController;
 use App\Http\Controllers\Admin\Master\SiteController;
 use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\QuestionnaireController;
@@ -66,6 +70,9 @@ Route::middleware(['auth', 'role:system-administrator'])->prefix('admin')->name(
         Route::post('/data-types', [DataTypeController::class, 'store'])->name('data-types.store');
         Route::put('/data-types/{fieldType}', [DataTypeController::class, 'update'])->name('data-types.update');
         Route::delete('/data-types/{fieldType}', [DataTypeController::class, 'destroy'])->name('data-types.destroy');
+
+        Route::get('/hierarchy', [HierarchyController::class, 'index'])->name('hierarchy.index');
+        Route::put('/hierarchy/{client}', [HierarchyController::class, 'update'])->name('hierarchy.update');
     });
 
     // Questionnaires (standalone module)
@@ -103,19 +110,44 @@ Route::middleware(['auth', 'role:system-administrator'])->prefix('admin')->name(
         Route::post('/',                   [AssetController::class, 'store'])->name('store');
         Route::get('/{asset}',             [AssetController::class, 'show'])->name('show');
         Route::get('/{asset}/edit',        [AssetController::class, 'edit'])->name('edit');
-        Route::put('/{asset}',             [AssetController::class, 'update'])->name('update');
+        Route::match(['put', 'patch'], '/{asset}', [AssetController::class, 'update'])->name('update');
         Route::patch('/{asset}/remove',    [AssetController::class, 'remove'])->name('remove');
     });
 });
 
 // Reviewer / Approver (Manager)
 Route::middleware(['auth', 'role:manager'])->prefix('reviewer')->name('reviewer.')->group(function () {
-    Route::get('/dashboard', fn () => view('reviewer.dashboard'))->name('dashboard');
+    Route::get('/dashboard', function () {
+        $clientIds = \App\Models\Client::where('manager_id', auth()->id())->pluck('id');
+        $scope = fn ($q) => $clientIds->isEmpty() ? $q
+            : $q->whereHas('asset.site', fn ($s) => $s->whereIn('client_id', $clientIds));
+
+        $pendingCount  = $scope(\App\Models\InspectionRecord::query())->where('document_status', 'draft')->count();
+        $approvedToday = $scope(\App\Models\InspectionRecord::query())
+            ->where('document_status', 'approved')->whereDate('created_at', today())->count();
+        $openJobs = \App\Models\Job::when($clientIds->isNotEmpty(), fn ($q) => $q->whereIn('client_id', $clientIds))
+            ->whereNotIn('status', ['approved', 'issued', 'closed'])->count();
+        return view('reviewer.dashboard', compact('pendingCount', 'approvedToday', 'openJobs'));
+    })->name('dashboard');
+
+    Route::get('/inspections',                           [ReviewerInspectionController::class, 'index'])->name('inspections.index');
+    Route::get('/inspections/{inspection}',              [ReviewerInspectionController::class, 'show'])->name('inspections.show');
+    Route::post('/inspections/{inspection}/approve',     [ReviewerInspectionController::class, 'approve'])->name('inspections.approve');
+    Route::post('/inspections/{inspection}/reject',      [ReviewerInspectionController::class, 'reject'])->name('inspections.reject');
 });
 
 // Field Technician
 Route::middleware(['auth', 'role:field-technician'])->prefix('technician')->name('technician.')->group(function () {
     Route::get('/dashboard', fn () => view('technician.dashboard'))->name('dashboard');
+
+    Route::get('/jobs',          [TechnicianJobController::class, 'index'])->name('jobs.index');
+    Route::get('/jobs/{job}',    [TechnicianJobController::class, 'show'])->name('jobs.show');
+
+    Route::get('/jobs/{job}/inspect',  [TechnicianCaptureController::class, 'inspectForm'])->name('jobs.inspect');
+    Route::post('/jobs/{job}/inspect', [TechnicianCaptureController::class, 'inspectStore'])->name('jobs.inspect.store');
+
+    Route::get('/jobs/{job}/install',  [TechnicianCaptureController::class, 'installForm'])->name('jobs.install');
+    Route::post('/jobs/{job}/install', [TechnicianCaptureController::class, 'installStore'])->name('jobs.install.store');
 });
 
 // Client User
@@ -125,6 +157,18 @@ Route::middleware(['auth', 'role:client-user'])->prefix('client')->name('client.
 
 // Shared authenticated routes
 Route::middleware('auth')->group(function () {
+    Route::get('/dashboard', function () {
+        /** @var \App\Models\User $user */
+        $user = \Illuminate\Support\Facades\Auth::user();
+        return match (true) {
+            $user->hasRole('system-administrator') => redirect()->route('admin.dashboard'),
+            $user->hasRole('manager')              => redirect()->route('reviewer.dashboard'),
+            $user->hasRole('field-technician')     => redirect()->route('technician.dashboard'),
+            $user->hasRole('client-user')          => redirect()->route('client.dashboard'),
+            default                                => redirect('/'),
+        };
+    })->name('dashboard');
+
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');

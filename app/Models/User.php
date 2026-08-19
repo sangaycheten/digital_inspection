@@ -32,6 +32,11 @@ class User extends Authenticatable
         return $this->belongsToMany(Site::class, 'user_site');
     }
 
+    public function managedClients(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Client::class, 'manager_id');
+    }
+
     public function creator(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

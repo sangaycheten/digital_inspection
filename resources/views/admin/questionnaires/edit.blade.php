@@ -50,15 +50,30 @@
                     @csrf
                     <div class="card-body">
 
-                        <div class="mb-3" style="max-width:460px;">
-                            <label class="form-label fw-medium">Section</label>
-                            <select name="section_id" id="sgSectionId" class="form-select">
-                                <option value="">— No section —</option>
-                                @foreach($sections as $sec)
-                                <option value="{{ $sec->id }}">{{ $sec->name }}</option>
-                                @endforeach
-                            </select>
-                            <div class="form-text">All sub-questions will belong to this section.</div>
+                        <div class="row g-3 mb-3" style="max-width:700px;">
+                            <div class="col-md-6">
+                                <label class="form-label fw-medium">Asset Type</label>
+                                <select name="asset_type" class="form-select">
+                                    <option value="">— Not asset-specific —</option>
+                                    @foreach($assetTypes as $val => $label)
+                                    <option value="{{ $val }}"
+                                        {{ old('asset_type', $questionnaire->asset_type) === $val ? 'selected' : '' }}>
+                                        {{ $label }}
+                                    </option>
+                                    @endforeach
+                                </select>
+                                <div class="form-text">Links this questionnaire to a specific asset type.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-medium">Section</label>
+                                <select name="section_id" id="sgSectionId" class="form-select">
+                                    <option value="">— No section —</option>
+                                    @foreach($sections as $sec)
+                                    <option value="{{ $sec->id }}">{{ $sec->name }}</option>
+                                    @endforeach
+                                </select>
+                                <div class="form-text">All sub-questions will belong to this section.</div>
+                            </div>
                         </div>
 
                         <hr class="my-3">
@@ -100,6 +115,21 @@
                       id="editQuestionnaireForm">
                     @csrf @method('PUT')
                     <div class="card-body">
+
+                        {{-- Asset Type --}}
+                        <div class="mb-3">
+                            <label class="form-label">Asset Type</label>
+                            <select name="asset_type" class="form-select">
+                                <option value="">— Not asset-specific —</option>
+                                @foreach($assetTypes as $val => $label)
+                                <option value="{{ $val }}"
+                                    {{ old('asset_type', $questionnaire->asset_type) === $val ? 'selected' : '' }}>
+                                    {{ $label }}
+                                </option>
+                                @endforeach
+                            </select>
+                            <div class="form-text">Questions assigned to an asset type appear in the inspection form for that asset.</div>
+                        </div>
 
                         {{-- Section --}}
                         <div class="mb-3">

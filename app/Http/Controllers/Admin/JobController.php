@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Building;
 use App\Models\Client;
 use App\Models\Job;
+use App\Models\MasterLookup;
 use App\Models\Site;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -86,7 +87,9 @@ class JobController extends Controller
             'inspectionRecords.asset',
         ]);
 
-        return view('admin.jobs.show', compact('job'));
+        $assetTypes = MasterLookup::assetTypeMap();
+
+        return view('admin.jobs.show', compact('job', 'assetTypes'));
     }
 
     public function edit(Job $job): View

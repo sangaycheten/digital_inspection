@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Enums\DataType;
 use App\Http\Controllers\Controller;
 use App\Models\FieldType;
+use App\Models\MasterLookup;
 use App\Models\Questionnaire;
 use App\Models\Section;
 use Illuminate\Http\JsonResponse;
@@ -22,10 +23,11 @@ class QuestionnaireController extends Controller
         $fieldTypesForJs = FieldType::where('status', 'active')->orderBy('name')->get()
             ->map(fn($ft) => ['id' => $ft->id, 'name' => $ft->name, 'type' => $ft->type, 'options' => $ft->options ?? []])
             ->values()->all();
-        $sections = Section::where('status', 'active')->orderBy('name')->get(['id', 'name']);
+        $sections   = Section::where('status', 'active')->orderBy('name')->get(['id', 'name']);
+        $assetTypes = MasterLookup::assetTypeMap();
 
         return view('admin.questionnaires.create', compact(
-            'typeOptions', 'fieldTypesForJs', 'sections'
+            'typeOptions', 'fieldTypesForJs', 'sections', 'assetTypes'
         ));
     }
 
@@ -40,6 +42,7 @@ class QuestionnaireController extends Controller
             ->where('status', 'active')->where('id', '!=', $questionnaire->id)
             ->orderBy('name')->get(['id', 'name', 'key', 'type']);
         $sections          = Section::where('status', 'active')->orderBy('name')->get(['id', 'name']);
+        $assetTypes        = MasterLookup::assetTypeMap();
         $subQuestionnaires = $questionnaire->subQuestionnaires()->orderBy('created_at')->get();
         $subsForJs         = $subQuestionnaires->map(fn($q) => [
             'id'            => $q->id,
@@ -56,7 +59,7 @@ class QuestionnaireController extends Controller
 
         return view('admin.questionnaires.edit', compact(
             'questionnaire', 'subQuestionnaires', 'subsForJs',
-            'typeOptions', 'fieldTypesForJs', 'parentQuestionnaires', 'sections'
+            'typeOptions', 'fieldTypesForJs', 'parentQuestionnaires', 'sections', 'assetTypes'
         ));
     }
 
@@ -69,13 +72,15 @@ class QuestionnaireController extends Controller
                   ->orWhere('key', 'like', "%{$request->search}%"))
             ->when($request->type,       fn($q) => $q->where('type',       $request->type))
             ->when($request->section_id, fn($q) => $q->where('section_id', $request->section_id))
+            ->when($request->asset_type, fn($q) => $q->where('asset_type', $request->asset_type))
             ->when($request->status,     fn($q) => $q->where('status',     $request->status))
             ->latest()->paginate(15)->withQueryString();
 
         $typeOptions = DataType::valueLabelMap();
         $sections    = Section::where('status', 'active')->orderBy('name')->get(['id', 'name']);
+        $assetTypes  = MasterLookup::assetTypeMap();
 
-        return view('admin.questionnaires.index', compact('questionnaires', 'typeOptions', 'sections'));
+        return view('admin.questionnaires.index', compact('questionnaires', 'typeOptions', 'sections', 'assetTypes'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -114,6 +119,7 @@ class QuestionnaireController extends Controller
             'type'            => ['required', 'array', 'min:1'],
             'type.*'          => ['required', new Enum(DataType::class)],
             'field_type_id'   => ['nullable', 'array'],
+            'asset_type'      => ['nullable', 'string'],
             'section_id'      => ['nullable', 'array'],
             'section_id.*'    => ['nullable', 'uuid', 'exists:sections,id'],
             'enabled'         => ['nullable', 'array'],
@@ -140,6 +146,7 @@ class QuestionnaireController extends Controller
                 'key'           => strtolower($validated['key'][$i]),
                 'type'          => $validated['type'][$i],
                 'field_type_id' => $validated['field_type_id'][$i] ?? null,
+                'asset_type'    => $validated['asset_type'] ?? null,
                 'section_id'    => $validated['section_id'][$i] ?? null,
                 'enabled'       => ($validated['enabled'][$i] ?? '0') === '1',
                 'required'      => ($validated['required'][$i] ?? '0') === '1',
@@ -166,6 +173,7 @@ class QuestionnaireController extends Controller
                 'key'           => strtolower($validated['key'][$i]),
                 'type'          => $validated['type'][$i],
                 'field_type_id' => $validated['field_type_id'][$i] ?? null,
+                'asset_type'    => $validated['asset_type'] ?? null,
                 'section_id'    => $validated['section_id'][$i] ?? null,
                 'parent_id'     => $parentId,
                 'enabled'       => ($validated['enabled'][$i] ?? '0') === '1',
@@ -197,6 +205,7 @@ class QuestionnaireController extends Controller
             'key'           => ['required', 'string', 'max:100', 'alpha_dash', Rule::unique('questionnaires', 'key')->ignore($questionnaire->id)],
             'type'          => ['required', new Enum(DataType::class)],
             'field_type_id' => $needsFieldType ? ['required', 'uuid', 'exists:field_types,id'] : ['nullable'],
+            'asset_type'    => ['nullable', 'string', Rule::exists('master_lookups', 'value')->where('category', 'asset_type')],
             'section_id'    => ['nullable', 'uuid', 'exists:sections,id'],
             'parent_id'     => $isSubQ
                                 ? ['required', 'uuid', 'exists:questionnaires,id', Rule::notIn([$questionnaire->id])]
@@ -251,6 +260,7 @@ class QuestionnaireController extends Controller
         }
 
         $validated = $request->validate(array_merge([
+            'asset_type'    => ['nullable', 'string', Rule::exists('master_lookups', 'value')->where('category', 'asset_type')],
             'sub_id'        => ['nullable', 'array'],
             'sub_id.*'      => ['nullable', 'uuid'],
             'name'          => ['required', 'array', 'min:1'],
@@ -269,6 +279,8 @@ class QuestionnaireController extends Controller
             'status'        => ['required', 'array', 'min:1'],
             'status.*'      => ['required', 'in:active,inactive'],
         ], $perRowRules), $customMessages);
+
+        $parent->update(['asset_type' => $validated['asset_type'] ?? null]);
 
         $submittedIds = array_values(array_filter($validated['sub_id'] ?? [], fn($id) => !empty($id)));
 
