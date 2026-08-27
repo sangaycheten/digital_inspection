@@ -97,31 +97,60 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-header d-flex align-items-center">
-                    <h4 class="card-title mb-0 flex-grow-1">Recent Inspection Reports</h4>
-                    <a href="#" class="btn btn-sm btn-outline-secondary">
-                        <i class="ri-download-2-line me-1"></i> Export
-                    </a>
+                    <h4 class="card-title mb-0 flex-grow-1">
+                        <i class="ri-award-line me-2 text-primary"></i>My Inspection Certificates
+                    </h4>
                 </div>
                 <div class="card-body">
+                    @if(isset($accessibleJobs) && $accessibleJobs->isNotEmpty())
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
                             <thead class="table-light">
                                 <tr>
-                                    <th>Report #</th>
+                                    <th>Certificate No</th>
                                     <th>Site</th>
-                                    <th>Asset</th>
-                                    <th>Inspection Date</th>
+                                    <th>Work Type</th>
                                     <th>Status</th>
-                                    <th>Document</th>
+                                    <th>Date</th>
+                                    <th class="text-end">Download</th>
                                 </tr>
                             </thead>
                             <tbody>
+                                @foreach($accessibleJobs as $certJob)
                                 <tr>
-                                    <td colspan="6" class="text-center text-muted py-4">No reports available yet.</td>
+                                    <td>
+                                        <span class="fw-semibold text-primary">CERT-{{ strtoupper(substr($certJob->id, 0, 8)) }}</span>
+                                    </td>
+                                    <td>{{ $certJob->site->name ?? $certJob->site->address ?? '—' }}</td>
+                                    <td>
+                                        <span class="badge bg-info-subtle text-info">
+                                            {{ \App\Models\Job::WORK_TYPES[$certJob->work_type] }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-success-subtle text-success">
+                                            {{ \App\Models\Job::STATUSES[$certJob->status] }}
+                                        </span>
+                                    </td>
+                                    <td class="text-muted fs-13">{{ $certJob->updated_at->format('d M Y') }}</td>
+                                    <td class="text-end">
+                                        <a href="{{ route('client.certificates.download', $certJob) }}"
+                                           class="btn btn-sm btn-primary">
+                                            <i class="ri-file-download-line me-1"></i>Download PDF
+                                        </a>
+                                    </td>
                                 </tr>
+                                @endforeach
                             </tbody>
                         </table>
                     </div>
+                    @else
+                    <div class="text-center text-muted py-5">
+                        <i class="ri-award-line fs-1 text-muted opacity-50"></i>
+                        <p class="mt-2 mb-0">No certificates available yet.</p>
+                        <small>Certificates will appear here once your inspection has been completed and issued.</small>
+                    </div>
+                    @endif
                 </div>
             </div>
         </div>

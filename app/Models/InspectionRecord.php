@@ -25,6 +25,7 @@ class InspectionRecord extends Model
 
     const DOCUMENT_STATUSES = [
         'draft',
+        'submitted',
         'approved',
     ];
 
@@ -71,6 +72,11 @@ class InspectionRecord extends Model
     public function previousInspection(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(InspectionRecord::class, 'previous_inspection_id');
+    }
+
+    public function job(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Job::class);
     }
 
     public function answers(): \Illuminate\Database\Eloquent\Relations\HasMany

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AssetController;
+use App\Http\Controllers\Admin\InspectionController as AdminInspectionController;
 use App\Http\Controllers\Reviewer\InspectionController as ReviewerInspectionController;
 use App\Http\Controllers\Technician\CaptureController as TechnicianCaptureController;
 use App\Http\Controllers\Technician\JobController as TechnicianJobController;
@@ -24,58 +25,15 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-// System Administrator
+// System Administrator — dashboard and questionnaires (admin-only)
 Route::middleware(['auth', 'role:system-administrator'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/dashboard', function () {
         return view('admin.dashboard', [
             'userCount' => \App\Models\User::count(),
         ]);
     })->name('dashboard');
-    Route::get('/users', [RegisteredUserController::class, 'index'])->name('users.index');
-    Route::get('/users/create', [RegisteredUserController::class, 'create'])->name('users.create');
-    Route::post('/users', [RegisteredUserController::class, 'store'])->name('users.store');
-    Route::get('/users/{user}/edit', [RegisteredUserController::class, 'edit'])->name('users.edit');
-    Route::put('/users/{user}', [RegisteredUserController::class, 'update'])->name('users.update');
-    Route::delete('/users/{user}', [RegisteredUserController::class, 'destroy'])->name('users.destroy');
-    Route::patch('/users/{user}/restore', [RegisteredUserController::class, 'restore'])->name('users.restore')->withTrashed();
 
-    // Master Data
-    Route::prefix('master')->name('master.')->group(function () {
-        Route::get('/clients', [ClientController::class, 'index'])->name('clients.index');
-        Route::post('/clients', [ClientController::class, 'store'])->name('clients.store');
-        Route::put('/clients/{client}', [ClientController::class, 'update'])->name('clients.update');
-        Route::delete('/clients/{client}', [ClientController::class, 'destroy'])->name('clients.destroy');
-
-        Route::get('/sites', [SiteController::class, 'index'])->name('sites.index');
-        Route::post('/sites', [SiteController::class, 'store'])->name('sites.store');
-        Route::put('/sites/{site}', [SiteController::class, 'update'])->name('sites.update');
-        Route::delete('/sites/{site}', [SiteController::class, 'destroy'])->name('sites.destroy');
-
-        Route::get('/buildings', [BuildingController::class, 'index'])->name('buildings.index');
-        Route::post('/buildings', [BuildingController::class, 'store'])->name('buildings.store');
-        Route::put('/buildings/{building}', [BuildingController::class, 'update'])->name('buildings.update');
-        Route::delete('/buildings/{building}', [BuildingController::class, 'destroy'])->name('buildings.destroy');
-
-        Route::get('/lookups', [MasterLookupController::class, 'index'])->name('lookups.index');
-        Route::post('/lookups', [MasterLookupController::class, 'store'])->name('lookups.store');
-        Route::put('/lookups/{lookup}', [MasterLookupController::class, 'update'])->name('lookups.update');
-        Route::delete('/lookups/{lookup}', [MasterLookupController::class, 'destroy'])->name('lookups.destroy');
-
-        Route::get('/sections', [SectionController::class, 'index'])->name('sections.index');
-        Route::post('/sections', [SectionController::class, 'store'])->name('sections.store');
-        Route::put('/sections/{section}', [SectionController::class, 'update'])->name('sections.update');
-        Route::delete('/sections/{section}', [SectionController::class, 'destroy'])->name('sections.destroy');
-
-        Route::get('/data-types', [DataTypeController::class, 'index'])->name('data-types.index');
-        Route::post('/data-types', [DataTypeController::class, 'store'])->name('data-types.store');
-        Route::put('/data-types/{fieldType}', [DataTypeController::class, 'update'])->name('data-types.update');
-        Route::delete('/data-types/{fieldType}', [DataTypeController::class, 'destroy'])->name('data-types.destroy');
-
-        Route::get('/hierarchy', [HierarchyController::class, 'index'])->name('hierarchy.index');
-        Route::put('/hierarchy/{client}', [HierarchyController::class, 'update'])->name('hierarchy.update');
-    });
-
-    // Questionnaires (standalone module)
+    // Questionnaires
     Route::prefix('questionnaires')->name('questionnaires.')->group(function () {
         Route::get('/', [QuestionnaireController::class, 'index'])->name('index');
         Route::post('/', [QuestionnaireController::class, 'store'])->name('store');
@@ -85,33 +43,113 @@ Route::middleware(['auth', 'role:system-administrator'])->prefix('admin')->name(
         Route::put('/{questionnaire}', [QuestionnaireController::class, 'update'])->name('update');
         Route::delete('/{questionnaire}', [QuestionnaireController::class, 'destroy'])->name('destroy');
     });
+});
 
-    Route::get('/rbac', [RbacController::class, 'index'])->name('rbac.index');
-    Route::put('/rbac', [RbacController::class, 'update'])->name('rbac.update');
-    Route::get('/permissions', [PermissionController::class, 'index'])->name('permissions.index');
-    Route::post('/permissions', [PermissionController::class, 'store'])->name('permissions.store');
-    Route::delete('/permissions/{permission}', [PermissionController::class, 'destroy'])->name('permissions.destroy');
-    Route::get('/audit-log', [AuditLogController::class, 'index'])->name('audit-log.index');
+// Master Data — system-administrator and manager only (via permission:manage master)
+Route::middleware(['auth', 'permission:manage master'])->prefix('admin/master')->name('admin.master.')->group(function () {
+    Route::get('/clients', [ClientController::class, 'index'])->name('clients.index');
+    Route::post('/clients', [ClientController::class, 'store'])->name('clients.store');
+    Route::put('/clients/{client}', [ClientController::class, 'update'])->name('clients.update');
+    Route::delete('/clients/{client}', [ClientController::class, 'destroy'])->name('clients.destroy');
 
-    // Jobs
-    Route::prefix('jobs')->name('jobs.')->group(function () {
-        Route::get('/',              [JobController::class, 'index'])->name('index');
-        Route::get('/create',       [JobController::class, 'create'])->name('create');
-        Route::post('/',            [JobController::class, 'store'])->name('store');
-        Route::get('/{job}',        [JobController::class, 'show'])->name('show');
-        Route::get('/{job}/edit',   [JobController::class, 'edit'])->name('edit');
-        Route::put('/{job}',        [JobController::class, 'update'])->name('update');
+    Route::get('/sites', [SiteController::class, 'index'])->name('sites.index');
+    Route::post('/sites', [SiteController::class, 'store'])->name('sites.store');
+    Route::put('/sites/{site}', [SiteController::class, 'update'])->name('sites.update');
+    Route::delete('/sites/{site}', [SiteController::class, 'destroy'])->name('sites.destroy');
+
+    Route::get('/buildings', [BuildingController::class, 'index'])->name('buildings.index');
+    Route::post('/buildings', [BuildingController::class, 'store'])->name('buildings.store');
+    Route::put('/buildings/{building}', [BuildingController::class, 'update'])->name('buildings.update');
+    Route::delete('/buildings/{building}', [BuildingController::class, 'destroy'])->name('buildings.destroy');
+
+    Route::get('/lookups', [MasterLookupController::class, 'index'])->name('lookups.index');
+    Route::post('/lookups', [MasterLookupController::class, 'store'])->name('lookups.store');
+    Route::put('/lookups/{lookup}', [MasterLookupController::class, 'update'])->name('lookups.update');
+    Route::delete('/lookups/{lookup}', [MasterLookupController::class, 'destroy'])->name('lookups.destroy');
+
+    Route::get('/sections', [SectionController::class, 'index'])->name('sections.index');
+    Route::post('/sections', [SectionController::class, 'store'])->name('sections.store');
+    Route::put('/sections/{section}', [SectionController::class, 'update'])->name('sections.update');
+    Route::delete('/sections/{section}', [SectionController::class, 'destroy'])->name('sections.destroy');
+
+    Route::get('/data-types', [DataTypeController::class, 'index'])->name('data-types.index');
+    Route::post('/data-types', [DataTypeController::class, 'store'])->name('data-types.store');
+    Route::put('/data-types/{fieldType}', [DataTypeController::class, 'update'])->name('data-types.update');
+    Route::delete('/data-types/{fieldType}', [DataTypeController::class, 'destroy'])->name('data-types.destroy');
+
+    Route::get('/hierarchy', [HierarchyController::class, 'index'])->name('hierarchy.index');
+    Route::put('/hierarchy/{client}', [HierarchyController::class, 'update'])->name('hierarchy.update');
+});
+
+// System Settings — locked to system-administrator and manager only, with per-permission granularity
+Route::middleware(['auth', 'role:system-administrator|manager'])->prefix('admin')->name('admin.')->group(function () {
+    // Users
+    Route::middleware('permission:manage users')->group(function () {
+        Route::get('/users', [RegisteredUserController::class, 'index'])->name('users.index');
+        Route::get('/users/create', [RegisteredUserController::class, 'create'])->name('users.create');
+        Route::post('/users', [RegisteredUserController::class, 'store'])->name('users.store');
+        Route::get('/users/{user}/edit', [RegisteredUserController::class, 'edit'])->name('users.edit');
+        Route::put('/users/{user}', [RegisteredUserController::class, 'update'])->name('users.update');
+        Route::delete('/users/{user}', [RegisteredUserController::class, 'destroy'])->name('users.destroy');
+        Route::patch('/users/{user}/restore', [RegisteredUserController::class, 'restore'])->name('users.restore')->withTrashed();
     });
 
-    // Asset Register
+    // Roles (RBAC matrix)
+    Route::middleware('permission:assign roles')->group(function () {
+        Route::get('/rbac', [RbacController::class, 'index'])->name('rbac.index');
+        Route::put('/rbac', [RbacController::class, 'update'])->name('rbac.update');
+    });
+
+    // Permissions
+    Route::middleware('permission:permission')->group(function () {
+        Route::get('/permissions', [PermissionController::class, 'index'])->name('permissions.index');
+        Route::post('/permissions', [PermissionController::class, 'store'])->name('permissions.store');
+        Route::delete('/permissions/{permission}', [PermissionController::class, 'destroy'])->name('permissions.destroy');
+    });
+
+    // Audit Log
+    Route::middleware('permission:view audit log')->group(function () {
+        Route::get('/audit-log', [AuditLogController::class, 'index'])->name('audit-log.index');
+    });
+});
+
+// Jobs — permission-based (managers and admins who have view/manage jobs)
+Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
+    Route::prefix('jobs')->name('jobs.')->group(function () {
+        // Static routes must come before parameterised /{job} routes
+        Route::get('/',       [JobController::class, 'index'])->middleware('permission:view jobs|manage jobs')->name('index');
+        Route::get('/create', [JobController::class, 'create'])->middleware('permission:manage jobs')->name('create');
+        Route::post('/',      [JobController::class, 'store'])->middleware('permission:manage jobs')->name('store');
+
+        Route::get('/{job}',             [JobController::class, 'show'])->middleware('permission:view jobs|manage jobs')->name('show');
+        Route::get('/{job}/edit',        [JobController::class, 'edit'])->middleware('permission:manage jobs')->name('edit');
+        Route::put('/{job}',             [JobController::class, 'update'])->middleware('permission:manage jobs')->name('update');
+        Route::get('/{job}/certificate',              [JobController::class, 'certificate'])->middleware('permission:view jobs|manage jobs')->name('certificate');
+        Route::post('/{job}/send-certificate',        [JobController::class, 'sendCertificate'])->middleware('permission:manage jobs')->name('sendCertificate');
+        Route::post('/{job}/toggle-certificate-access', [JobController::class, 'toggleCertificateAccess'])->middleware('permission:manage jobs')->name('toggleCertificateAccess');
+    });
+});
+
+// Asset Register — permission-based (any role that has view/manage assets permission)
+Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
     Route::prefix('assets')->name('assets.')->group(function () {
-        Route::get('/',                    [AssetController::class, 'index'])->name('index');
-        Route::get('/create',              [AssetController::class, 'create'])->name('create');
-        Route::post('/',                   [AssetController::class, 'store'])->name('store');
-        Route::get('/{asset}',             [AssetController::class, 'show'])->name('show');
-        Route::get('/{asset}/edit',        [AssetController::class, 'edit'])->name('edit');
-        Route::match(['put', 'patch'], '/{asset}', [AssetController::class, 'update'])->name('update');
-        Route::patch('/{asset}/remove',    [AssetController::class, 'remove'])->name('remove');
+        // Static routes must come before parameterised /{asset} routes
+        Route::get('/',       [AssetController::class, 'index'])->middleware('permission:view assets|manage assets')->name('index');
+        Route::get('/create', [AssetController::class, 'create'])->middleware('permission:manage assets')->name('create');
+        Route::post('/',      [AssetController::class, 'store'])->middleware('permission:manage assets')->name('store');
+
+        Route::get('/{asset}',                                [AssetController::class, 'show'])->middleware('permission:view assets|manage assets')->name('show');
+        Route::get('/{asset}/edit',                           [AssetController::class, 'edit'])->middleware('permission:manage assets')->name('edit');
+        Route::match(['put', 'patch'], '/{asset}',            [AssetController::class, 'update'])->middleware('permission:manage assets')->name('update');
+        Route::patch('/{asset}/remove',                       [AssetController::class, 'remove'])->middleware('permission:manage assets')->name('remove');
+    });
+});
+
+// Inspections — admin view (all records, no client scope)
+Route::middleware(['auth', 'permission:review inspections'])->prefix('admin')->name('admin.')->group(function () {
+    Route::prefix('inspections')->name('inspections.')->group(function () {
+        Route::get('/',            [AdminInspectionController::class, 'index'])->name('index');
+        Route::get('/{inspection}', [AdminInspectionController::class, 'show'])->name('show');
     });
 });
 
@@ -122,9 +160,14 @@ Route::middleware(['auth', 'role:manager'])->prefix('reviewer')->name('reviewer.
         $scope = fn ($q) => $clientIds->isEmpty() ? $q
             : $q->whereHas('asset.site', fn ($s) => $s->whereIn('client_id', $clientIds));
 
-        $pendingCount  = $scope(\App\Models\InspectionRecord::query())->where('document_status', 'draft')->count();
+        $pendingCount       = $scope(\App\Models\InspectionRecord::query())->where('document_status', 'submitted')->count();
+        $approvedTodayIds   = \Spatie\Activitylog\Models\Activity::where('log_name', 'inspection_record')
+            ->where('description', 'updated')
+            ->whereJsonContains('properties->attributes->document_status', 'approved')
+            ->whereDate('created_at', today())
+            ->pluck('subject_id');
         $approvedToday = $scope(\App\Models\InspectionRecord::query())
-            ->where('document_status', 'approved')->whereDate('created_at', today())->count();
+            ->whereIn('id', $approvedTodayIds)->count();
         $openJobs = \App\Models\Job::when($clientIds->isNotEmpty(), fn ($q) => $q->whereIn('client_id', $clientIds))
             ->whereNotIn('status', ['approved', 'issued', 'closed'])->count();
         return view('reviewer.dashboard', compact('pendingCount', 'approvedToday', 'openJobs'));
@@ -138,10 +181,21 @@ Route::middleware(['auth', 'role:manager'])->prefix('reviewer')->name('reviewer.
 
 // Field Technician
 Route::middleware(['auth', 'role:field-technician'])->prefix('technician')->name('technician.')->group(function () {
-    Route::get('/dashboard', fn () => view('technician.dashboard'))->name('dashboard');
+    Route::get('/dashboard', function () {
+        $activeStatuses = ['new', 'scheduled', 'in_progress', 'rectification_required'];
+        $workTypeCounts = \App\Models\Job::whereHas('technicians', fn ($q) => $q->where('users.id', \Illuminate\Support\Facades\Auth::id()))
+            ->whereIn('status', $activeStatuses)
+            ->selectRaw('work_type, count(*) as total')
+            ->groupBy('work_type')
+            ->pluck('total', 'work_type');
+
+        return view('technician.dashboard', compact('workTypeCounts'));
+    })->name('dashboard');
 
     Route::get('/jobs',          [TechnicianJobController::class, 'index'])->name('jobs.index');
     Route::get('/jobs/{job}',    [TechnicianJobController::class, 'show'])->name('jobs.show');
+    Route::post('/jobs/{job}/submit-for-review', [TechnicianJobController::class, 'submitForReview'])->name('jobs.submitForReview');
+    Route::post('/jobs/{job}/assets', [TechnicianJobController::class, 'storeAsset'])->name('jobs.assets.store');
 
     Route::get('/jobs/{job}/inspect',  [TechnicianCaptureController::class, 'inspectForm'])->name('jobs.inspect');
     Route::post('/jobs/{job}/inspect', [TechnicianCaptureController::class, 'inspectStore'])->name('jobs.inspect.store');
@@ -152,7 +206,32 @@ Route::middleware(['auth', 'role:field-technician'])->prefix('technician')->name
 
 // Client User
 Route::middleware(['auth', 'role:client-user'])->prefix('client')->name('client.')->group(function () {
-    Route::get('/dashboard', fn () => view('client.dashboard'))->name('dashboard');
+    Route::get('/dashboard', function () {
+        /** @var \App\Models\User $user */
+        $user = \Illuminate\Support\Facades\Auth::user();
+        $accessibleJobs = \App\Models\Job::where('client_id', $user->client_id)
+            ->whereIn('status', ['issued', 'closed'])
+            ->where('certificate_accessible', true)
+            ->with(['site'])
+            ->latest()
+            ->get();
+        return view('client.dashboard', compact('accessibleJobs'));
+    })->name('dashboard');
+
+    Route::get('/certificates/{job}', [JobController::class, 'certificate'])->name('certificates.download');
+});
+
+// Notification actions (all authenticated users)
+Route::middleware('auth')->prefix('notifications')->name('notifications.')->group(function () {
+    Route::post('/{id}/read', function (string $id) {
+        auth()->user()->notifications()->where('id', $id)->update(['read_at' => now()]);
+        return back();
+    })->name('markRead');
+
+    Route::post('/read-all', function () {
+        auth()->user()->unreadNotifications()->update(['read_at' => now()]);
+        return back();
+    })->name('markAllRead');
 });
 
 // Shared authenticated routes

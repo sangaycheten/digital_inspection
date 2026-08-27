@@ -129,10 +129,16 @@
                                 </tr>
                             </thead>
                             <tbody>
+                                @php $restrictedModules = ['Master Data', 'User & Role Management', 'Audit Log']; @endphp
                                 @foreach($permissionGroups as $module => $permissions)
                                 <tr>
                                     <td class="module-header" colspan="{{ $roles->count() + 1 }}">
                                         <i class="ri-apps-line me-1"></i> {{ $module }}
+                                        @if(in_array($module, $restrictedModules))
+                                            <span class="badge bg-warning-subtle text-warning ms-2 fs-11">
+                                                <i class="ri-lock-line me-1"></i>Admin & Manager only
+                                            </span>
+                                        @endif
                                     </td>
                                 </tr>
                                 @foreach($permissions as $permission)
@@ -141,17 +147,12 @@
                                         <span class="text-muted">{{ ucfirst($permission->name) }}</span>
                                     </td>
                                     @foreach($roles as $role)
+                                    @php $isRestricted = in_array($module, $restrictedModules) && !in_array($role->name, ['system-administrator', 'manager']); @endphp
                                     <td class="permission-check">
-                                        @if($module === 'Master')
-                                            @if($role->name === 'system-administrator')
-                                                <span class="text-success fs-18" title="Always granted — System Administrator only">
-                                                    <i class="ri-lock-fill"></i>
-                                                </span>
-                                            @else
-                                                <span class="text-muted fs-18" title="Restricted to System Administrator">
-                                                    <i class="ri-lock-line"></i>
-                                                </span>
-                                            @endif
+                                        @if($isRestricted)
+                                            <span class="text-muted fs-18" title="Locked — restricted to Admin & Manager only">
+                                                <i class="ri-lock-line"></i>
+                                            </span>
                                         @elseif($role->hasPermissionTo($permission->name))
                                             <span class="text-success fs-18"><i class="ri-checkbox-circle-fill"></i></span>
                                         @else
@@ -255,23 +256,23 @@
                                     <tr>
                                         <td class="module-header" colspan="{{ $roles->count() + 1 }}">
                                             <i class="ri-apps-line me-1"></i> {{ $module }}
+                                            @if(in_array($module, $restrictedModules))
+                                                <span class="badge bg-warning-subtle text-warning ms-2 fs-11">
+                                                    <i class="ri-lock-line me-1"></i>Admin & Manager only
+                                                </span>
+                                            @endif
                                         </td>
                                     </tr>
                                     @foreach($permissions as $permission)
                                     <tr>
                                         <td class="ps-4">{{ ucfirst($permission->name) }}</td>
                                         @foreach($roles as $role)
+                                        @php $isRestricted = in_array($module, $restrictedModules) && !in_array($role->name, ['system-administrator', 'manager']); @endphp
                                         <td class="permission-check">
-                                            @if($module === 'Master')
-                                                @if($role->name === 'system-administrator')
-                                                    <span class="text-success fs-18" title="Always granted — System Administrator only">
-                                                        <i class="ri-lock-fill"></i>
-                                                    </span>
-                                                @else
-                                                    <span class="text-muted fs-18" title="Restricted to System Administrator">
-                                                        <i class="ri-lock-line"></i>
-                                                    </span>
-                                                @endif
+                                            @if($isRestricted)
+                                                <span class="text-muted fs-18" title="Locked — restricted to Admin & Manager only">
+                                                    <i class="ri-lock-line"></i>
+                                                </span>
                                             @else
                                                 <div class="form-check">
                                                     <input class="form-check-input" type="checkbox"

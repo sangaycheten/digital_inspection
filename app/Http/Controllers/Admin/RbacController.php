@@ -22,21 +22,24 @@ class RbacController extends Controller
         return view('admin.rbac.index', compact('roles', 'permissionGroups'));
     }
 
+    // Permissions in these modules can only be held by system-administrator or manager
+    private const RESTRICTED_MODULES = ['Master Data', 'User & Role Management', 'Audit Log'];
+
     public function update(Request $request): RedirectResponse
     {
         $roles = Role::with('permissions')->get();
 
-        $masterPerms = Permission::where('module', 'Master')->pluck('name')->toArray();
+        $restrictedPerms = Permission::whereIn('module', self::RESTRICTED_MODULES)->pluck('name')->toArray();
 
         foreach ($roles as $role) {
             $newPermissions = $request->input("permissions.{$role->id}", []);
 
-            if ($role->name === 'system-administrator') {
-                // Always keep all Master permissions on system-administrator
-                $newPermissions = array_values(array_unique(array_merge($newPermissions, $masterPerms)));
+            if (in_array($role->name, ['system-administrator', 'manager'])) {
+                // Allowed roles: keep whatever is submitted for restricted modules
+                $newPermissions = array_values($newPermissions);
             } else {
-                // Strip any Master permissions from all other roles
-                $newPermissions = array_values(array_diff($newPermissions, $masterPerms));
+                // Other roles: strip all restricted-module permissions regardless of what was submitted
+                $newPermissions = array_values(array_diff($newPermissions, $restrictedPerms));
             }
 
             $oldPermissions = $role->permissions->pluck('name')->toArray();

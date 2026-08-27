@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -55,10 +56,14 @@ class Job extends Model
         'scheduled_date',
         'scope_notes',
         'created_by',
+        'certificate_sent_at',
+        'certificate_accessible',
     ];
 
     protected $casts = [
-        'scheduled_date' => 'date',
+        'scheduled_date'         => 'date',
+        'certificate_sent_at'    => 'datetime',
+        'certificate_accessible' => 'boolean',
     ];
 
     protected static function booted(): void
@@ -117,6 +122,17 @@ class Job extends Model
     public function inspectionRecords(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(InspectionRecord::class, 'job_id');
+    }
+
+    public function assignedBuildingIdsForTechnician(string $userId): \Illuminate\Support\Collection
+    {
+        $ids = DB::table('job_technician_buildings')
+            ->where('job_id', $this->id)
+            ->where('user_id', $userId)
+            ->pluck('building_id');
+
+        // Fall back to all job buildings for jobs created before per-building assignment
+        return $ids->isNotEmpty() ? $ids : $this->buildings()->pluck('buildings.id');
     }
 
     public function nextStatuses(): array

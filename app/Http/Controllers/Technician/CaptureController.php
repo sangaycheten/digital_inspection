@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Technician;
 
 use App\Http\Controllers\Controller;
 use App\Models\Asset;
+use App\Models\Building;
 use App\Models\InspectionAnswer;
 use App\Models\InspectionRecord;
 use App\Models\InstallationAsset;
@@ -11,6 +12,8 @@ use App\Models\Job;
 use App\Models\JobTargetAsset;
 use App\Models\MasterLookup;
 use App\Models\Questionnaire;
+use App\Notifications\InspectionResubmittedNotification;
+use App\Notifications\InspectionSubmittedNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -20,11 +23,30 @@ use Illuminate\View\View;
 
 class CaptureController extends Controller
 {
+    private function buildingsClaimedByOthers(Job $job, \Illuminate\Support\Collection $buildingIds): \Illuminate\Support\Collection
+    {
+        if ($buildingIds->isEmpty()) return collect();
+
+        return DB::table('inspection_records')
+            ->join('assets', 'assets.id', '=', 'inspection_records.asset_id')
+            ->where('inspection_records.job_id', $job->id)
+            ->where('inspection_records.technician_id', '!=', Auth::id())
+            ->whereNotNull('inspection_records.technician_id')
+            ->whereIn('assets.building_id', $buildingIds)
+            ->pluck('assets.building_id')
+            ->unique();
+    }
+
     private function authorizeJob(Job $job): void
     {
         $job->loadMissing('technicians');
         abort_if(!$job->technicians->contains('id', Auth::id()), 403, 'You are not assigned to this job.');
         abort_if($job->isClosed(), 403, 'This job is closed.');
+        abort_if(
+            $job->scheduled_date && today()->lt($job->scheduled_date),
+            403,
+            'Inspection cannot start before the scheduled date (' . $job->scheduled_date->format('d M Y') . ').'
+        );
     }
 
     // ─── Inspection ────────────────────────────────────────────────────────────
@@ -35,10 +57,17 @@ class CaptureController extends Controller
 
         $job->load(['site', 'client', 'buildings', 'targetAssets']);
 
-        $buildingIds = $job->buildings->pluck('id');
+        $buildingIds      = $job->assignedBuildingIdsForTechnician(Auth::id());
+        $claimedByOthers  = $this->buildingsClaimedByOthers($job, $buildingIds);
+        $availableIds     = $buildingIds->diff($claimedByOthers);
+        $lockedBuildings  = Building::whereIn('id', $claimedByOthers)->orderBy('name_or_level')->get();
 
         $assets = Asset::where('site_id', $job->site_id)
-            ->when($buildingIds->isNotEmpty(), fn ($q) => $q->whereIn('building_id', $buildingIds))
+            ->when($buildingIds->isNotEmpty(), function ($q) use ($availableIds) {
+                $availableIds->isNotEmpty()
+                    ? $q->whereIn('building_id', $availableIds)
+                    : $q->whereRaw('0 = 1');
+            })
             ->whereNotIn('current_status', ['removed', 'replaced'])
             ->with(['building', 'currentInspection'])
             ->orderBy('building_id')
@@ -47,8 +76,22 @@ class CaptureController extends Controller
 
         $targetAssetIds = $job->targetAssets->pluck('asset_id');
         $grouped        = $assets->groupBy(fn ($a) => $a->building?->name_or_level ?? 'Unassigned');
-        $doneAssetIds   = InspectionRecord::where('job_id', $job->id)->pluck('asset_id');
-        $assetTypes     = MasterLookup::assetTypeMap();
+        // Non-draft (submitted/approved) records — locked, shown read-only.
+        $lockedRecords = InspectionRecord::where('job_id', $job->id)
+            ->whereIn('document_status', ['submitted', 'approved'])
+            ->with('answers')
+            ->get()
+            ->keyBy('asset_id');
+        $doneAssetStatuses = $lockedRecords->mapWithKeys(fn ($r, $id) => [$id => $r->document_status]);
+        $doneAssetIds      = $lockedRecords->keys();
+        $assetTypes        = MasterLookup::assetTypeMap();
+
+        // Draft records — editable, pre-fill the inspect forms.
+        $existingRecords = InspectionRecord::where('job_id', $job->id)
+            ->where('document_status', 'draft')
+            ->with('answers')
+            ->get()
+            ->keyBy('asset_id');
 
         // Questions grouped by asset_type for the checklist
         $usedAssetTypes = $assets->pluck('asset_type')->unique()->filter()->values();
@@ -61,7 +104,7 @@ class CaptureController extends Controller
             ->get()
             ->groupBy('asset_type');
 
-        return view('technician.capture.inspect', compact('job', 'grouped', 'targetAssetIds', 'doneAssetIds', 'assetTypes', 'questionsByType'));
+        return view('technician.capture.inspect', compact('job', 'grouped', 'targetAssetIds', 'doneAssetIds', 'doneAssetStatuses', 'lockedRecords', 'existingRecords', 'assetTypes', 'questionsByType', 'lockedBuildings'));
     }
 
     public function inspectStore(Request $request, Job $job): RedirectResponse
@@ -71,7 +114,7 @@ class CaptureController extends Controller
         $data = $request->validate([
             'inspection_date'                  => ['required', 'date'],
             'assets'                           => ['nullable', 'array'],
-            'assets.*.result'                  => ['required_with:assets.*.asset_id', 'in:' . implode(',', InspectionRecord::RESULTS)],
+            'assets.*.result'                  => ['nullable', 'in:' . implode(',', InspectionRecord::RESULTS)],
             'assets.*.condition'               => ['nullable', 'string', 'max:1000'],
             'assets.*.defect_description'      => ['nullable', 'string', 'max:1000'],
             'assets.*.reason_for_result'       => ['nullable', 'string', 'max:1000'],
@@ -82,41 +125,93 @@ class CaptureController extends Controller
             'answers.*.*'                      => ['nullable', 'string', 'max:2000'],
         ]);
 
+        $isSavingDraft  = $request->boolean('save_as_draft');
+        $isResubmission = $job->status === 'rectification_required';
+
+        // Determine which buildings this technician may write to
+        $assignedBuildingIds = $job->assignedBuildingIdsForTechnician(Auth::id());
+        $claimedByOthers     = $this->buildingsClaimedByOthers($job, $assignedBuildingIds);
+        $availableIds        = $assignedBuildingIds->diff($claimedByOthers);
+
+        // Pre-load building_id for each submitted asset so we can gate below
+        $assetBuildingMap = $assignedBuildingIds->isNotEmpty()
+            ? Asset::whereIn('id', array_keys($data['assets'] ?? []))->pluck('building_id', 'id')
+            : collect();
+
         $records = collect($data['assets'] ?? [])
-            ->filter(fn ($rec) => !empty($rec['result']));
+            ->filter(fn ($rec) => !empty($rec['result']))
+            ->filter(function ($rec, $assetId) use ($assignedBuildingIds, $availableIds, $assetBuildingMap) {
+                if ($assignedBuildingIds->isEmpty()) return true; // no building restriction
+                $bldId = $assetBuildingMap->get($assetId);
+                return $bldId === null || $availableIds->contains($bldId);
+            });
 
         if ($records->isEmpty()) {
-            return back()->withErrors(['assets' => 'Please record at least one inspection result.']);
+            // If there are already submitted/approved records, nothing left to do
+            $alreadyDone = InspectionRecord::where('job_id', $job->id)
+                ->whereIn('document_status', ['submitted', 'approved'])
+                ->exists();
+
+            if ($alreadyDone) {
+                return redirect()->route('technician.jobs.show', $job)
+                    ->with('success', 'All inspection records have already been submitted.');
+            }
+
+            if (!$isSavingDraft) {
+                return back()->withErrors(['assets' => 'Please record at least one inspection result.']);
+            }
         }
 
-        $saved = 0;
+        $saved           = 0;
+        $submittedAssetIds = [];
 
         $allAnswers = $data['answers'] ?? [];
 
-        DB::transaction(function () use ($data, $job, $records, $allAnswers, &$saved) {
+        $docStatus = $isSavingDraft ? 'draft' : 'submitted';
+
+        DB::transaction(function () use ($data, $job, $records, $allAnswers, $docStatus, &$saved, &$submittedAssetIds) {
             foreach ($records as $assetId => $rec) {
-                $previous = InspectionRecord::where('asset_id', $assetId)
-                    ->orderByDesc('inspection_date')
+                // Only draft records are editable; submitted/approved records are locked
+                $existing = InspectionRecord::where('job_id', $job->id)
+                    ->where('asset_id', $assetId)
+                    ->where('document_status', 'draft')
                     ->first();
 
-                // Saved as draft — asset.current_status updated only on approval
-                $inspectionRecord = InspectionRecord::create([
-                    'asset_id'               => $assetId,
-                    'job_id'                 => $job->id,
-                    'inspection_date'        => $data['inspection_date'],
-                    'technician_id'          => Auth::id(),
-                    'result'                 => $rec['result'],
-                    'condition'              => $rec['condition']          ?? null,
-                    'defect_description'     => $rec['defect_description'] ?? null,
-                    'reason_for_result'      => $rec['reason_for_result']  ?? null,
-                    'recommendation'         => $rec['recommendation']     ?? null,
-                    'required_action'        => $rec['required_action']    ?? null,
-                    'document_status'        => 'draft',
-                    'is_current'             => false,
-                    'previous_inspection_id' => $previous?->id,
-                ]);
+                if ($existing) {
+                    $existing->answers()->delete();
+                    $existing->update([
+                        'inspection_date'    => $data['inspection_date'],
+                        'result'             => $rec['result'],
+                        'condition'          => $rec['condition']          ?? null,
+                        'defect_description' => $rec['defect_description'] ?? null,
+                        'reason_for_result'  => $rec['reason_for_result']  ?? null,
+                        'recommendation'     => $rec['recommendation']     ?? null,
+                        'required_action'    => $rec['required_action']    ?? null,
+                        'document_status'    => $docStatus,
+                    ]);
+                    $inspectionRecord = $existing;
+                } else {
+                    $previous = InspectionRecord::where('asset_id', $assetId)
+                        ->orderByDesc('inspection_date')
+                        ->first();
 
-                // Save checklist answers for this asset
+                    $inspectionRecord = InspectionRecord::create([
+                        'asset_id'               => $assetId,
+                        'job_id'                 => $job->id,
+                        'inspection_date'        => $data['inspection_date'],
+                        'technician_id'          => Auth::id(),
+                        'result'                 => $rec['result'],
+                        'condition'              => $rec['condition']          ?? null,
+                        'defect_description'     => $rec['defect_description'] ?? null,
+                        'reason_for_result'      => $rec['reason_for_result']  ?? null,
+                        'recommendation'         => $rec['recommendation']     ?? null,
+                        'required_action'        => $rec['required_action']    ?? null,
+                        'document_status'        => $docStatus,
+                        'is_current'             => false,
+                        'previous_inspection_id' => $previous?->id,
+                    ]);
+                }
+
                 $assetAnswers = $allAnswers[$assetId] ?? [];
                 foreach ($assetAnswers as $questionnaireId => $answerValue) {
                     if ($answerValue === null || $answerValue === '') continue;
@@ -132,14 +227,65 @@ class CaptureController extends Controller
                     ->where('asset_id', $assetId)
                     ->update(['completed' => true, 'completed_at' => now()]);
 
+                if ($docStatus === 'submitted') {
+                    $submittedAssetIds[] = $assetId;
+                }
                 $saved++;
             }
 
-            // Advance job to in_progress if still on scheduled
-            if ($job->status === 'scheduled') {
+            if ($job->status === 'scheduled' && $saved > 0) {
                 $job->update(['status' => 'in_progress']);
             }
         });
+
+        if ($isSavingDraft) {
+            return redirect()->route('technician.jobs.inspect', $job)
+                ->with('draft_saved', true);
+        }
+
+        // Auto-advance job to submitted_for_review once all job assets are captured
+        if ($job->status === 'in_progress') {
+            $buildingIds   = $job->buildings()->pluck('buildings.id');
+            $totalAssets   = \App\Models\Asset::where('site_id', $job->site_id)
+                ->when($buildingIds->isNotEmpty(), fn ($q) => $q->whereIn('building_id', $buildingIds))
+                ->whereNotIn('current_status', ['removed', 'replaced'])
+                ->count();
+            $capturedCount = InspectionRecord::where('job_id', $job->id)
+                ->whereIn('document_status', ['submitted', 'approved'])
+                ->distinct('asset_id')
+                ->count('asset_id');
+
+            if ($totalAssets > 0 && $capturedCount >= $totalAssets) {
+                $job->update(['status' => 'submitted_for_review']);
+            }
+        }
+
+        // Notify the mapped manager (submission or resubmission after rejection)
+        if (!empty($submittedAssetIds)) {
+            $job->loadMissing(['client.manager', 'site']);
+            $manager = $job->client?->manager;
+            if ($manager) {
+                $buildingNames = Building::whereIn('id',
+                    Asset::whereIn('id', $submittedAssetIds)->pluck('building_id')->unique()->filter()
+                )->pluck('name_or_level')->sort()->values()->all();
+
+                if ($isResubmission) {
+                    $manager->notify(new InspectionResubmittedNotification(
+                        job: $job,
+                        technician: Auth::user(),
+                        recordCount: $saved,
+                        buildingNames: $buildingNames,
+                    ));
+                } else {
+                    $manager->notify(new InspectionSubmittedNotification(
+                        job: $job,
+                        technician: Auth::user(),
+                        recordCount: $saved,
+                        buildingNames: $buildingNames,
+                    ));
+                }
+            }
+        }
 
         return redirect()->route('technician.jobs.show', $job)
             ->with('success', "{$saved} inspection record(s) saved successfully.");
@@ -153,7 +299,7 @@ class CaptureController extends Controller
 
         $job->load(['site', 'client', 'buildings']);
 
-        $buildingIds = $job->buildings->pluck('id');
+        $buildingIds = $job->assignedBuildingIdsForTechnician(Auth::id());
 
         $existingAssets = Asset::where('site_id', $job->site_id)
             ->when($buildingIds->isNotEmpty(), fn ($q) => $q->whereIn('building_id', $buildingIds))
@@ -161,12 +307,19 @@ class CaptureController extends Controller
             ->orderBy('asset_code')
             ->get();
 
-        $buildings  = $job->buildings->isNotEmpty()
-            ? $job->buildings
+        $buildings = $buildingIds->isNotEmpty()
+            ? Building::whereIn('id', $buildingIds)->orderBy('name_or_level')->get()
             : $job->site->buildings()->orderBy('name_or_level')->get();
+
         $assetTypes = MasterLookup::assetTypeMap();
 
-        return view('technician.capture.install', compact('job', 'existingAssets', 'buildings', 'assetTypes'));
+        // Already saved installation records for this job
+        $registeredEntries = \App\Models\InstallationAsset::with(['asset.building'])
+            ->where('job_id', $job->id)
+            ->latest()
+            ->get();
+
+        return view('technician.capture.install', compact('job', 'existingAssets', 'buildings', 'assetTypes', 'registeredEntries'));
     }
 
     public function installStore(Request $request, Job $job): RedirectResponse

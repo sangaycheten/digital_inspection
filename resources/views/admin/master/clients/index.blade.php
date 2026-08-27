@@ -74,6 +74,7 @@
                                     <th style="width:48px;"></th>
                                     <th>Client Name</th>
                                     <th>Code</th>
+                                    <th>Email</th>
                                     <th>Billing Contact</th>
                                     <th>Sites</th>
                                     <th>Status</th>
@@ -100,6 +101,7 @@
                                     </td>
                                     <td class="fw-medium">{{ $client->name }}</td>
                                     <td><span class="badge bg-light text-dark">{{ $client->custom_client_code }}</span></td>
+                                    <td class="text-muted fs-12">{{ $client->email ?? '—' }}</td>
                                     <td class="text-muted fs-12">{{ Str::limit($client->billing_contact_info, 40) ?? '—' }}</td>
                                     <td><span class="badge bg-primary-subtle text-primary">{{ $client->sites_count }}</span></td>
                                     <td>
@@ -160,6 +162,10 @@
                                                                 <input type="text" name="name" class="form-control" value="{{ $client->name }}" required>
                                                             </div>
                                                             <div class="mb-3">
+                                                                <label class="form-label">Email</label>
+                                                                <input type="email" name="email" class="form-control" value="{{ $client->email }}" placeholder="contact@company.com">
+                                                            </div>
+                                                            <div class="mb-3">
                                                                 <label class="form-label">Client Code <span class="text-danger">*</span></label>
                                                                 <input type="text" name="custom_client_code" class="form-control" value="{{ $client->custom_client_code }}" required maxlength="20">
                                                                 <div class="form-text">Short unique code, e.g. RPH, WST</div>
@@ -212,7 +218,7 @@
                                 </tr>
                                 @empty
                                 <tr>
-                                    <td colspan="9" class="text-center text-muted py-5">
+                                    <td colspan="10" class="text-center text-muted py-5">
                                         <i class="ri-building-2-line fs-24 d-block mb-2"></i>No clients found.
                                     </td>
                                 </tr>
@@ -268,6 +274,12 @@
                             @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
                         <div class="mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" name="email" class="form-control @error('email') is-invalid @enderror"
+                                   value="{{ old('email') }}" placeholder="contact@company.com">
+                            @error('email')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="mb-3">
                             <label class="form-label">Client Code <span class="text-danger">*</span></label>
                             <input type="text" name="custom_client_code" class="form-control @error('custom_client_code') is-invalid @enderror"
                                    value="{{ old('custom_client_code') }}" required maxlength="20" placeholder="e.g. RPH">
@@ -310,7 +322,7 @@
         }
     }
 
-    @if($errors->has('name') || $errors->has('custom_client_code') || $errors->has('status') || $errors->has('logo'))
+    @if($errors->has('name') || $errors->has('email') || $errors->has('custom_client_code') || $errors->has('status') || $errors->has('logo'))
     document.addEventListener('DOMContentLoaded', function () {
         new bootstrap.Modal(document.getElementById('createClientModal')).show();
     });

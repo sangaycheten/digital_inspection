@@ -89,16 +89,41 @@ class QuestionnaireController extends Controller
         $groupSeqs      = $request->input('group_seq', []);
         $isGroupParents = $request->input('is_group_parent', []);
 
+        // Pre-compute group parent type per group_seq so we can validate condition for children
+        $groupParentTypes = [];
+        foreach ($types as $i => $type) {
+            $seq      = $groupSeqs[$i] ?? '';
+            $isParent = ($isGroupParents[$i] ?? '0') === '1';
+            if ($seq !== '' && $isParent) {
+                $groupParentTypes[$seq] = $type;
+            }
+        }
+
         $perRowRules    = [];
         $customMessages = [];
 
         foreach ($types as $i => $type) {
-            $num     = $i + 1;
-            $needsFt = in_array($type, [DataType::Toggle->value, DataType::OptionList->value]);
+            $num      = $i + 1;
+            $seq      = $groupSeqs[$i] ?? '';
+            $isParent = ($isGroupParents[$i] ?? '0') === '1';
+            $needsFt  = in_array($type, [DataType::Toggle->value, DataType::OptionList->value]);
 
             $perRowRules["field_type_id.$i"] = $needsFt
                 ? ['required', 'uuid', 'exists:field_types,id']
                 : ['nullable'];
+
+            // condition required for children whose group parent is a switch
+            if (!$isParent && $seq !== '') {
+                $parentIsSwitch = ($groupParentTypes[$seq] ?? null) === DataType::Toggle->value;
+                $perRowRules["condition.$i"] = $parentIsSwitch
+                    ? ['required', 'in:yes,no']
+                    : ['nullable', 'in:yes,no'];
+                if ($parentIsSwitch) {
+                    $customMessages["condition.{$i}.required"] = "Sub-question #{$num}: Condition (Yes/No) is required.";
+                }
+            } else {
+                $perRowRules["condition.$i"] = ['nullable'];
+            }
 
             $customMessages["name.{$i}.required"]          = "Question #{$num}: Name is required.";
             $customMessages["key.{$i}.required"]           = "Question #{$num}: Key is required.";
@@ -119,6 +144,8 @@ class QuestionnaireController extends Controller
             'type'            => ['required', 'array', 'min:1'],
             'type.*'          => ['required', new Enum(DataType::class)],
             'field_type_id'   => ['nullable', 'array'],
+            'condition'       => ['nullable', 'array'],
+            'condition.*'     => ['nullable', 'in:yes,no'],
             'asset_type'      => ['nullable', 'string'],
             'section_id'      => ['nullable', 'array'],
             'section_id.*'    => ['nullable', 'uuid', 'exists:sections,id'],
@@ -166,7 +193,8 @@ class QuestionnaireController extends Controller
             $isParent = ($validated['is_group_parent'][$i] ?? '0') === '1';
             if ($seq === '' || $isParent) continue;
 
-            $parentId = $groupParentIds[$seq] ?? null;
+            $parentId       = $groupParentIds[$seq] ?? null;
+            $parentIsSwitch = ($groupParentTypes[$seq] ?? null) === DataType::Toggle->value;
 
             $q = Questionnaire::create([
                 'name'          => $validated['name'][$i],
@@ -175,6 +203,7 @@ class QuestionnaireController extends Controller
                 'field_type_id' => $validated['field_type_id'][$i] ?? null,
                 'asset_type'    => $validated['asset_type'] ?? null,
                 'section_id'    => $validated['section_id'][$i] ?? null,
+                'condition'     => $parentIsSwitch ? ($validated['condition'][$i] ?? null) : null,
                 'parent_id'     => $parentId,
                 'enabled'       => ($validated['enabled'][$i] ?? '0') === '1',
                 'required'      => ($validated['required'][$i] ?? '0') === '1',
@@ -284,11 +313,28 @@ class QuestionnaireController extends Controller
 
         $submittedIds = array_values(array_filter($validated['sub_id'] ?? [], fn($id) => !empty($id)));
 
+        // Check key uniqueness against the database before any writes
+        $count = count($validated['name']);
+        for ($i = 0; $i < $count; $i++) {
+            $key   = strtolower($validated['key'][$i]);
+            $subId = $validated['sub_id'][$i] ?? null;
+            $num   = $i + 1;
+
+            $conflict = \App\Models\Questionnaire::where('key', $key)
+                ->when($subId, fn ($q) => $q->where('id', '!=', $subId))
+                ->exists();
+
+            if ($conflict) {
+                return back()->withInput()->withErrors([
+                    "key.{$i}" => "Sub-question #{$num}: Key '{$key}' is already used by another questionnaire. Choose a unique key.",
+                ]);
+            }
+        }
+
         Questionnaire::where('parent_id', $parent->id)
             ->when(!empty($submittedIds), fn($q) => $q->whereNotIn('id', $submittedIds))
             ->delete();
 
-        $count = count($validated['name']);
         for ($i = 0; $i < $count; $i++) {
             $row = [
                 'name'          => $validated['name'][$i],

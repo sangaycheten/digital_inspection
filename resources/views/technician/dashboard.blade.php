@@ -132,14 +132,23 @@
                 <div class="card-body">
                     <p class="text-muted mb-3">Select the type of capture to begin:</p>
                     <div class="d-grid gap-2">
-                        <a href="#" class="btn btn-outline-primary text-start">
-                            <i class="ri-survey-line me-2"></i> First Inspection
+                        <a href="{{ route('technician.jobs.index', ['work_type' => 'first_inspection']) }}" class="btn btn-outline-primary text-start d-flex align-items-center justify-content-between">
+                            <span><i class="ri-survey-line me-2"></i> First Inspection</span>
+                            @if(($workTypeCounts['first_inspection'] ?? 0) > 0)
+                                <span class="badge bg-primary rounded-pill">{{ $workTypeCounts['first_inspection'] }}</span>
+                            @endif
                         </a>
-                        <a href="#" class="btn btn-outline-warning text-start">
-                            <i class="ri-refresh-line me-2"></i> Re-Inspection
+                        <a href="{{ route('technician.jobs.index', ['work_type' => 're_inspection']) }}" class="btn btn-outline-warning text-start d-flex align-items-center justify-content-between">
+                            <span><i class="ri-refresh-line me-2"></i> Re-Inspection</span>
+                            @if(($workTypeCounts['re_inspection'] ?? 0) > 0)
+                                <span class="badge bg-warning rounded-pill">{{ $workTypeCounts['re_inspection'] }}</span>
+                            @endif
                         </a>
-                        <a href="#" class="btn btn-outline-success text-start">
-                            <i class="ri-tools-line me-2"></i> Installation / Rectification
+                        <a href="{{ route('technician.jobs.index', ['work_type' => 'installation']) }}" class="btn btn-outline-success text-start d-flex align-items-center justify-content-between">
+                            <span><i class="ri-tools-line me-2"></i> Installation / Rectification</span>
+                            @if(($workTypeCounts['installation'] ?? 0) > 0)
+                                <span class="badge bg-success rounded-pill">{{ $workTypeCounts['installation'] }}</span>
+                            @endif
                         </a>
                     </div>
                 </div>

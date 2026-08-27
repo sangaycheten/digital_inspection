@@ -75,7 +75,7 @@
                                     </option>
                                     @endforeach
                                 </select>
-                                @error('work_type')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                @error('work_type')<div class="invalid-feedback">{!! $message !!}</div>@enderror
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Scheduled Date</label>
@@ -95,104 +95,120 @@
                     </div>
                 </div>
 
-                {{-- Buildings --}}
+                {{-- Technician-Building Assignment Matrix --}}
                 <div class="card mb-3">
                     <div class="card-header">
-                        <h6 class="card-title mb-0"><i class="ri-home-office-line me-2 text-primary"></i>Buildings in Scope</h6>
+                        <h6 class="card-title mb-0">
+                            <i class="ri-group-line me-2 text-primary"></i>Assign Technicians to Buildings
+                            <span class="text-danger">*</span>
+                        </h6>
                     </div>
                     <div class="card-body">
-                        <div id="buildingCheckboxes" class="row g-2">
-                            <p class="text-muted fs-13 mb-0">Select a site first to load buildings.</p>
+                        <div id="assignmentMatrix">
+                            <p class="text-muted fs-13 mb-0">Select a site first to load the assignment matrix.</p>
                         </div>
-                        @error('building_ids')<div class="text-danger fs-12 mt-1">{{ $message }}</div>@enderror
+                        @error('assignments')<div class="text-danger fs-12 mt-1">{{ $message }}</div>@enderror
                     </div>
                 </div>
 
             </div>
 
             <div class="col-lg-4">
-
-                {{-- Assign Technicians --}}
-                <div class="card mb-3">
-                    <div class="card-header">
-                        <h6 class="card-title mb-0"><i class="ri-user-star-line me-2 text-primary"></i>Assign Technicians</h6>
-                    </div>
-                    <div class="card-body">
-                        @if($technicians->isEmpty())
-                        <p class="text-muted fs-13 mb-0">No field technicians found. Create users with the <em>field-technician</em> role first.</p>
-                        @else
-                        <div class="vstack gap-2">
-                            @foreach($technicians as $tech)
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox"
-                                       name="technician_ids[]" value="{{ $tech->id }}"
-                                       id="tech{{ $tech->id }}"
-                                       {{ in_array($tech->id, old('technician_ids', [])) ? 'checked' : '' }}>
-                                <label class="form-check-label fs-13" for="tech{{ $tech->id }}">
-                                    {{ $tech->name }}
-                                </label>
-                            </div>
-                            @endforeach
-                        </div>
-                        @endif
-                        @error('technician_ids')<div class="text-danger fs-12 mt-1">{{ $message }}</div>@enderror
-                    </div>
-                </div>
-
-                <div class="d-flex gap-2">
+                <div class="d-flex gap-2 mt-2">
                     <button type="submit" class="btn btn-primary flex-grow-1">
                         <i class="ri-save-line me-1"></i> Create Job
                     </button>
                     <a href="{{ route('admin.jobs.index') }}" class="btn btn-light">Cancel</a>
                 </div>
-
             </div>
+
         </div>
     </form>
 
     @push('scripts')
+    @php
+    $techJson = $technicians->map(fn ($t) => [
+        'id'    => $t->id,
+        'name'  => $t->name,
+    ])->values();
+    $buildingsJson = \App\Models\Building::all(['id', 'site_id', 'name_or_level'])
+        ->groupBy('site_id')->map(fn ($b) => $b->values());
+    @endphp
     <script>
-    const buildingsBySite = @json(
-        \App\Models\Building::all(['id', 'site_id', 'name_or_level'])
-            ->groupBy('site_id')->map(fn ($b) => $b->values())
-    );
-    const oldBuildings = @json(old('building_ids', []));
+    const technicians            = @json($techJson);
+    const buildingsBySite        = @json($buildingsJson);
+    const oldAssignments         = @json(old('assignments', []));
+    const firstInspectedBuildings = @json($firstInspectedBuildingIds);
 
-    function loadBuildings(siteId) {
-        const wrap = document.getElementById('buildingCheckboxes');
-        wrap.innerHTML = '';
+    function getWorkType() {
+        return document.querySelector('[name="work_type"]')?.value || '';
+    }
+
+    function loadMatrix(siteId) {
+        const wrap = document.getElementById('assignmentMatrix');
         const buildings = buildingsBySite[siteId] || [];
+        const isFirstInspection = getWorkType() === 'first_inspection';
+
         if (!buildings.length) {
-            wrap.innerHTML = '<p class="text-muted fs-13 mb-0">No buildings for this site.</p>';
+            wrap.innerHTML = '<p class="text-muted fs-13 mb-0">No buildings registered for this site. Add buildings first via Master Data.</p>';
             return;
         }
-        buildings.forEach(function (b) {
-            const checked = oldBuildings.includes(b.id) ? 'checked' : '';
-            wrap.innerHTML += `
-                <div class="col-md-6">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox"
-                               name="building_ids[]" value="${b.id}" id="bld${b.id}" ${checked}>
-                        <label class="form-check-label fs-13" for="bld${b.id}">${b.name_or_level}</label>
-                    </div>
-                </div>`;
+        if (!technicians.length) {
+            wrap.innerHTML = '<p class="text-muted fs-13 mb-0">No field technicians found. Create users with the <em>field-technician</em> role first.</p>';
+            return;
+        }
+
+        let html = '<div class="table-responsive"><table class="table table-bordered align-middle mb-0">';
+        html += '<thead class="table-light"><tr>'
+            + '<th class="ps-3" style="width:200px">Building</th>'
+            + '<th>Assign Technicians <span class="text-muted fw-normal fs-12">(tick one or more)</span></th>'
+            + '</tr></thead><tbody>';
+
+        buildings.forEach(b => {
+            const alreadyDone = isFirstInspection && firstInspectedBuildings.includes(b.id);
+            const oldTechs = oldAssignments[b.id] || [];
+            let checks = '';
+            if (alreadyDone) {
+                checks = '<span class="badge bg-success-subtle text-success fs-12"><i class="ri-checkbox-circle-line me-1"></i>First Inspection Completed</span>';
+            } else {
+                technicians.forEach(t => {
+                    const checked = oldTechs.includes(t.id) ? 'checked' : '';
+                    const chkId = `chk_${b.id}_${t.id}`;
+                    checks += `<div class="form-check form-check-inline me-3">
+                        <input class="form-check-input" type="checkbox" id="${chkId}"
+                            name="assignments[${b.id}][]" value="${t.id}" ${checked}>
+                        <label class="form-check-label fs-13" for="${chkId}">${t.name}</label>
+                    </div>`;
+                });
+            }
+            html += `<tr>
+                <td class="ps-3 fw-medium fs-13">${b.name_or_level}</td>
+                <td><div class="d-flex flex-wrap align-items-center gap-1 py-1">${checks}</div></td>
+            </tr>`;
         });
+
+        html += '</tbody></table></div>';
+        wrap.innerHTML = html;
     }
 
     document.getElementById('siteSelect').addEventListener('change', function () {
         const opt = this.options[this.selectedIndex];
         document.getElementById('clientId').value      = opt.dataset.clientId || '';
         document.getElementById('clientDisplay').value = opt.dataset.clientName || '';
-        loadBuildings(this.value);
+        loadMatrix(this.value);
     });
 
-    // Pre-populate if old() data exists
+    document.querySelector('[name="work_type"]').addEventListener('change', function () {
+        const siteId = document.getElementById('siteSelect').value;
+        if (siteId) loadMatrix(siteId);
+    });
+
     const initSite = document.getElementById('siteSelect').value;
     if (initSite) {
         const opt = document.getElementById('siteSelect').options[document.getElementById('siteSelect').selectedIndex];
         document.getElementById('clientId').value      = opt.dataset.clientId || '';
         document.getElementById('clientDisplay').value = opt.dataset.clientName || '';
-        loadBuildings(initSite);
+        loadMatrix(initSite);
     }
     </script>
     @endpush

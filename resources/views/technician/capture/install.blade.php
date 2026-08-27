@@ -39,6 +39,47 @@
     </div>
     @endif
 
+    {{-- Registered entries for this job --}}
+    @if($registeredEntries->isNotEmpty())
+    <div class="card mb-4">
+        <div class="card-header d-flex align-items-center">
+            <h6 class="card-title mb-0 flex-grow-1">
+                <i class="ri-list-check me-2 text-success"></i>
+                Registered / Recorded Entries
+                <span class="badge bg-success-subtle text-success ms-2">{{ $registeredEntries->count() }}</span>
+            </h6>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Asset Code</th>
+                        <th>Type</th>
+                        <th>Building</th>
+                        <th>Zone</th>
+                        <th>Action</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($registeredEntries as $entry)
+                    <tr>
+                        <td class="fw-semibold">{{ $entry->asset->asset_code ?? '—' }}</td>
+                        <td class="text-muted fs-12">{{ $assetTypes[$entry->asset->asset_type ?? ''] ?? ($entry->asset->asset_type ?? '—') }}</td>
+                        <td class="text-muted fs-12">{{ $entry->asset->building->name_or_level ?? '—' }}</td>
+                        <td class="text-muted fs-12">{{ $entry->asset->zone ?? '—' }}</td>
+                        <td>
+                            <span class="badge bg-info-subtle text-info text-capitalize">{{ $entry->action }}</span>
+                        </td>
+                        <td class="text-muted fs-12">{{ $entry->material_notes ?? '—' }}</td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
+    @endif
+
     <form method="POST" action="{{ route('technician.jobs.install.store', $job) }}" id="installForm">
         @csrf
 

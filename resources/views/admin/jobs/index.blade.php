@@ -120,7 +120,13 @@
                             </thead>
                             <tbody>
                                 @forelse($jobs as $job)
-                                @php $sc = $statusColors[$job->status] ?? 'secondary'; @endphp
+                                @php
+                                    $sc        = $statusColors[$job->status] ?? 'secondary';
+                                    $isActive  = in_array($job->status, ['new', 'scheduled', 'in_progress', 'rectification_required']);
+                                    $isClosed  = in_array($job->status, ['approved', 'issued', 'closed']);
+                                    $dateOk    = !$job->scheduled_date || today()->gte($job->scheduled_date);
+                                    $daysUntil = $job->scheduled_date ? today()->diffInDays($job->scheduled_date, false) : null;
+                                @endphp
                                 <tr>
                                     <td class="ps-3 text-muted fs-12">{{ $jobs->firstItem() + $loop->index }}</td>
                                     <td>
@@ -137,8 +143,21 @@
                                             {{ \App\Models\Job::STATUSES[$job->status] ?? $job->status }}
                                         </span>
                                     </td>
-                                    <td class="fs-13 text-muted">
-                                        {{ $job->scheduled_date?->format('d M Y') ?? '—' }}
+                                    <td>
+                                        <div class="fs-13 text-muted">{{ $job->scheduled_date?->format('d M Y') ?? '—' }}</div>
+                                        @if($isClosed)
+                                        <span class="badge bg-success-subtle text-success fs-11 mt-1">
+                                            <i class="ri-checkbox-circle-line me-1"></i>Completed
+                                        </span>
+                                        @elseif($isActive && !$dateOk)
+                                        <span class="badge bg-warning-subtle text-warning fs-11 mt-1">
+                                            <i class="ri-calendar-event-line me-1"></i>Opens in {{ $daysUntil }} day(s)
+                                        </span>
+                                        @elseif($isActive && $dateOk)
+                                        <span class="badge bg-primary-subtle text-primary fs-11 mt-1">
+                                            <i class="ri-play-circle-line me-1"></i>Open for Capture
+                                        </span>
+                                        @endif
                                     </td>
                                     <td>
                                         @foreach($job->technicians->take(3) as $tech)

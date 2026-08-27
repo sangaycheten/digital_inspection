@@ -321,7 +321,8 @@
 
     @if($subQuestionnaires->isNotEmpty())
     // ── Sub-group edit ────────────────────────────────────────────────────────
-    const PARENT_IS_SWITCH = @json($questionnaire->type === 'switch');
+    const PARENT_IS_SWITCH  = @json($questionnaire->type === 'switch');
+    const PARENT_SW_OPTIONS = @json($questionnaire->fieldType->options ?? []);
     function sgAddRow(prefill) {
         prefill = prefill || {};
         const container = document.getElementById('sgContainer');
@@ -364,13 +365,11 @@
                 <small class="text-muted me-1">Options:</small><span class="sg-options-badges"></span>
             </div>
             <div class="sg-condition-wrap mb-2" style="display:none;">
-                <label class="form-label form-label-sm">Condition <span class="text-danger">*</span>
-                    <small class="text-muted fw-normal">— show this sub-question when switch is…</small>
-                </label>
+                <label class="form-label form-label-sm">Show when parent switch is <span class="text-danger">*</span></label>
                 <select name="condition[]" class="form-select form-select-sm sg-condition">
-                    <option value="">— Select condition —</option>
-                    <option value="yes">Yes / Switch ON</option>
-                    <option value="no">No / Switch OFF</option>
+                    <option value="">— Select —</option>
+                    ${PARENT_SW_OPTIONS[0] ? `<option value="yes">${sgEsc(PARENT_SW_OPTIONS[0])}</option>` : ''}
+                    ${PARENT_SW_OPTIONS[1] ? `<option value="no">${sgEsc(PARENT_SW_OPTIONS[1])}</option>`  : ''}
                 </select>
             </div>
             <div class="d-flex align-items-center gap-3 flex-wrap">

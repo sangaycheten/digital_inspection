@@ -164,22 +164,34 @@
             {{-- Sub-questionnaire section: manual parent entry + nested sq-rows --}}
             <div class="q-sub-section mt-2" style="display:none;">
 
-                {{-- Parent question — manual entry (type fixed as Text) --}}
+                {{-- Parent question — always Switch type --}}
                 <div class="border rounded p-3 mb-3 bg-light">
                     <p class="fw-semibold fs-12 text-muted text-uppercase mb-2">
                         <i class="ri-parent-line me-1"></i>Parent Question
-                        <span class="badge bg-primary-subtle text-primary fw-normal ms-1">Text</span>
+                        <span class="badge bg-primary-subtle text-primary fw-normal ms-1">Switch</span>
                     </p>
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-5">
+                            <label class="form-label form-label-sm">Switch Option Set <span class="text-danger">*</span></label>
+                            <select class="form-select form-select-sm sq-parent-ft-select" onchange="onParentFtChange(this)" disabled>
+                                <option value="">— Select option set —</option>
+                            </select>
+                            <div class="sq-parent-no-configs form-text text-warning" style="display:none;">
+                                <i class="ri-alert-line me-1"></i>No switch option sets yet.
+                                <a href="{{ route('admin.master.data-types.index') }}" target="_blank">Create in Data Types</a>.
+                            </div>
+                        </div>
+                    </div>
                     <div class="row g-2 mb-2">
                         <div class="col-md-7">
                             <label class="form-label form-label-sm">Name <span class="text-danger">*</span></label>
                             <input type="text" class="form-control form-control-sm sq-parent-name"
-                                   maxlength="255" placeholder="e.g. Roof description">
+                                   maxlength="255" placeholder="e.g. Is the equipment operational?">
                         </div>
                         <div class="col-md-5">
                             <label class="form-label form-label-sm">Key <span class="text-danger">*</span></label>
                             <input type="text" class="form-control form-control-sm font-monospace sq-parent-key"
-                                   maxlength="100" placeholder="e.g. roof_desc">
+                                   maxlength="100" placeholder="e.g. is_operational">
                         </div>
                     </div>
                     <div class="row g-2 align-items-center">
@@ -324,6 +336,12 @@
         if (type === SUB_Q_TYPE) {
             stdSection.style.display = 'none';
             subSection.style.display = '';
+            // Populate parent switch option set the first time
+            const parentFtSel  = row.querySelector('.sq-parent-ft-select');
+            const parentFtWarn = row.querySelector('.sq-parent-no-configs');
+            if (parentFtSel && parentFtSel.options.length <= 1) {
+                populateFtSelect(parentFtSel, parentFtWarn, 'switch', null);
+            }
             const sqCont = row.querySelector('.sq-container');
             if (sqCont && sqCont.querySelectorAll('.sq-row').length === 0) addSubQRow(row);
             return;
@@ -344,10 +362,35 @@
         showOptionBadges(selectEl, row.querySelector('.q-options-preview'), row.querySelector('.q-options-badges'));
     }
 
+    // ── Parent switch option set changed — refresh sub-row condition dropdowns ─
+    function onParentFtChange(selectEl) {
+        const qRow   = selectEl.closest('.q-row');
+        const chosen = selectEl.options[selectEl.selectedIndex];
+        const opts   = (chosen && chosen.value) ? JSON.parse(chosen.dataset.options || '[]') : [];
+        qRow.querySelectorAll('.sq-container .sq-row').forEach(sqRow => {
+            refreshConditionOptions(sqRow, opts);
+        });
+    }
+
+    function refreshConditionOptions(sqRow, opts) {
+        const condSel = sqRow.querySelector('.sq-condition');
+        if (!condSel) return;
+        const prev = condSel.value;
+        condSel.innerHTML = '<option value="">— Select —</option>';
+        if (opts[0]) condSel.innerHTML += `<option value="yes">${sqEsc(opts[0])}</option>`;
+        if (opts[1]) condSel.innerHTML += `<option value="no">${sqEsc(opts[1])}</option>`;
+        if (prev) condSel.value = prev;
+    }
+
     // ── Sub-question row management ──────────────────────────────────────────
     function addSubQRow(qRow, prefill) {
         prefill = prefill || {};
         const container = qRow.querySelector('.sq-container');
+        // Get current parent switch options to populate condition dropdown
+        const parentFtSel = qRow.querySelector('.sq-parent-ft-select');
+        const parentChosen = parentFtSel?.options[parentFtSel.selectedIndex];
+        const parentOpts   = (parentChosen && parentChosen.value)
+                             ? JSON.parse(parentChosen.dataset.options || '[]') : [];
 
         const div = document.createElement('div');
         div.className = 'sq-row mb-2 py-2';
@@ -384,6 +427,14 @@
             </div>
             <div class="sq-options-preview mb-2 p-2 rounded border bg-light" style="display:none;">
                 <small class="text-muted me-1">Options:</small><span class="sq-options-badges"></span>
+            </div>
+            <div class="sq-condition-wrap mb-2">
+                <label class="form-label form-label-sm">Show when parent switch is <span class="text-danger">*</span></label>
+                <select class="form-select form-select-sm sq-condition">
+                    <option value="">— Select —</option>
+                    ${parentOpts[0] ? `<option value="yes" ${prefill.condition==='yes'?'selected':''}>${sqEsc(parentOpts[0])}</option>` : ''}
+                    ${parentOpts[1] ? `<option value="no"  ${prefill.condition==='no' ?'selected':''}>${sqEsc(parentOpts[1])}</option>` : ''}
+                </select>
             </div>
             <div class="d-flex align-items-center gap-3 flex-wrap">
                 <div class="form-check form-switch mb-0">
@@ -473,14 +524,15 @@
             const type = row.querySelector('.q-type-select').value;
 
             if (type === SUB_Q_TYPE) {
-                const groupSeq = 'g' + rowIdx;
+                const groupSeq   = 'g' + rowIdx;
+                const parentFtSel = row.querySelector('.sq-parent-ft-select');
 
-                // Parent question (manually entered, type always text)
+                // Parent question — always Switch type
                 payload.push({
                     name:            row.querySelector('.sq-parent-name').value,
                     key:             row.querySelector('.sq-parent-key').value,
-                    type:            'text',
-                    field_type_id:   '',
+                    type:            'switch',
+                    field_type_id:   parentFtSel?.value || '',
                     section_id:      sectionId,
                     parent_id:       '',
                     condition:       '',
@@ -503,7 +555,7 @@
                                          ? (sqRow.querySelector('.sq-ft-select')?.value || '') : '',
                         section_id:      sectionId,
                         parent_id:       '',
-                        condition:       '',
+                        condition:       sqRow.querySelector('.sq-condition')?.value || '',
                         enabled:         sqRow.querySelector('.sq-enabled-cb').checked ? '1' : '0',
                         required:        sqRow.querySelector('.sq-required-cb').checked ? '1' : '0',
                         status:          sqRow.querySelector('.sq-status').value,

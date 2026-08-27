@@ -35,6 +35,17 @@ class SiteController extends Controller
             'site_notes' => ['nullable', 'string'],
         ]);
 
+        if (!empty($data['latitude']) && !empty($data['longitude'])) {
+            $exists = Site::where('latitude', $data['latitude'])
+                          ->where('longitude', $data['longitude'])
+                          ->exists();
+            if ($exists) {
+                return back()->withInput()->withErrors([
+                    'latitude' => 'A site is already registered at this exact location.',
+                ]);
+            }
+        }
+
         $site = Site::create($data);
 
         activity()->useLog('master')->causedBy(request()->user())
@@ -56,6 +67,18 @@ class SiteController extends Controller
             'longitude'  => ['nullable', 'numeric', 'between:-180,180'],
             'site_notes' => ['nullable', 'string'],
         ]);
+
+        if (!empty($data['latitude']) && !empty($data['longitude'])) {
+            $exists = Site::where('latitude', $data['latitude'])
+                          ->where('longitude', $data['longitude'])
+                          ->where('id', '!=', $site->id)
+                          ->exists();
+            if ($exists) {
+                return back()->withInput()->withErrors([
+                    'latitude' => 'Another site is already registered at this exact location.',
+                ]);
+            }
+        }
 
         $site->update($data);
 

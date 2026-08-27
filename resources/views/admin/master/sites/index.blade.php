@@ -367,7 +367,7 @@
     <script>
     const OSM_TILES   = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
     const OSM_ATTR    = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
-    const DEFAULT_LAT = 27.4716, DEFAULT_LNG = 89.6386, DEFAULT_ZOOM = 13;
+    const DEFAULT_LAT = 27.4716, DEFAULT_LNG = 89.6386, DEFAULT_ZOOM = 17;
 
     // Registry: mapId → { map, placePin }
     const mapRegistry = {};

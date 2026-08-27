@@ -26,6 +26,7 @@ class ClientController extends Controller
     {
         $data = $request->validate([
             'name'                 => ['required', 'string', 'max:255'],
+            'email'                => ['nullable', 'email', 'max:255', 'unique:clients,email'],
             'custom_client_code'   => ['required', 'string', 'max:20', 'unique:clients,custom_client_code'],
             'billing_contact_info' => ['nullable', 'string'],
             'status'               => ['required', 'in:active,inactive'],
@@ -52,6 +53,7 @@ class ClientController extends Controller
     {
         $data = $request->validate([
             'name'                 => ['required', 'string', 'max:255'],
+            'email'                => ['nullable', 'email', 'max:255', "unique:clients,email,{$client->id}"],
             'custom_client_code'   => ['required', 'string', 'max:20', "unique:clients,custom_client_code,{$client->id}"],
             'billing_contact_info' => ['nullable', 'string'],
             'status'               => ['required', 'in:active,inactive'],
