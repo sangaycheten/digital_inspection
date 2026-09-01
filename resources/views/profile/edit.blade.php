@@ -47,7 +47,8 @@
                 </div>
             </div>
 
-            <!-- Delete Account -->
+            <!-- Delete Account (hidden for client-user and field-technician) -->
+            @if(!Auth::user()->hasAnyRole(['client-user', 'field-technician']))
             <div class="card">
                 <div class="card-header">
                     <h5 class="card-title mb-0">Delete Account</h5>
@@ -56,6 +57,7 @@
                     @include('profile.partials.delete-user-form')
                 </div>
             </div>
+            @endif
 
         </div>
     </div>

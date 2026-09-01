@@ -14,10 +14,17 @@ use App\Http\Controllers\Admin\Master\DataTypeController;
 use App\Http\Controllers\Admin\Master\SectionController;
 use App\Http\Controllers\Admin\Master\HierarchyController;
 use App\Http\Controllers\Admin\Master\SiteController;
+use App\Http\Controllers\Admin\MenuElementController;
 use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\QuestionnaireController;
 use App\Http\Controllers\Admin\RbacController;
 use App\Http\Controllers\Auth\RegisteredUserController;
+use App\Http\Controllers\Client\DashboardController as ClientDashboardController;
+use App\Http\Controllers\Client\SiteController as ClientSiteController;
+use App\Http\Controllers\Client\AssetController as ClientAssetController;
+use App\Http\Controllers\Client\ReportController as ClientReportController;
+use App\Http\Controllers\Client\FeedbackController as ClientFeedbackController;
+use App\Http\Controllers\Admin\FeedbackController as AdminFeedbackController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -32,6 +39,11 @@ Route::middleware(['auth', 'role:system-administrator'])->prefix('admin')->name(
             'userCount' => \App\Models\User::count(),
         ]);
     })->name('dashboard');
+
+    // Menu Elements
+    Route::get('/menu-elements', [MenuElementController::class, 'index'])->name('menu.index');
+    Route::post('/menu-elements/{item}/move-up', [MenuElementController::class, 'moveUp'])->name('menu.moveUp');
+    Route::post('/menu-elements/{item}/move-down', [MenuElementController::class, 'moveDown'])->name('menu.moveDown');
 
     // Questionnaires
     Route::prefix('questionnaires')->name('questionnaires.')->group(function () {
@@ -92,6 +104,7 @@ Route::middleware(['auth', 'role:system-administrator|manager'])->prefix('admin'
         Route::put('/users/{user}', [RegisteredUserController::class, 'update'])->name('users.update');
         Route::delete('/users/{user}', [RegisteredUserController::class, 'destroy'])->name('users.destroy');
         Route::patch('/users/{user}/restore', [RegisteredUserController::class, 'restore'])->name('users.restore')->withTrashed();
+        Route::post('/users/{user}/send-credentials', [RegisteredUserController::class, 'sendCredentials'])->name('users.send-credentials');
     });
 
     // Roles (RBAC matrix)
@@ -111,6 +124,9 @@ Route::middleware(['auth', 'role:system-administrator|manager'])->prefix('admin'
     Route::middleware('permission:view audit log')->group(function () {
         Route::get('/audit-log', [AuditLogController::class, 'index'])->name('audit-log.index');
     });
+
+    // Client Feedback
+    Route::get('/feedback', [AdminFeedbackController::class, 'index'])->name('feedback.index');
 });
 
 // Jobs — permission-based (managers and admins who have view/manage jobs)
@@ -195,7 +211,9 @@ Route::middleware(['auth', 'role:field-technician'])->prefix('technician')->name
     Route::get('/jobs',          [TechnicianJobController::class, 'index'])->name('jobs.index');
     Route::get('/jobs/{job}',    [TechnicianJobController::class, 'show'])->name('jobs.show');
     Route::post('/jobs/{job}/submit-for-review', [TechnicianJobController::class, 'submitForReview'])->name('jobs.submitForReview');
-    Route::post('/jobs/{job}/assets', [TechnicianJobController::class, 'storeAsset'])->name('jobs.assets.store');
+    Route::post('/jobs/{job}/assets',           [TechnicianJobController::class, 'storeAsset'])->name('jobs.assets.store');
+    Route::put('/jobs/{job}/assets/{asset}',    [TechnicianJobController::class, 'updateAsset'])->name('jobs.assets.update');
+    Route::delete('/jobs/{job}/assets/{asset}', [TechnicianJobController::class, 'destroyAsset'])->name('jobs.assets.destroy');
 
     Route::get('/jobs/{job}/inspect',  [TechnicianCaptureController::class, 'inspectForm'])->name('jobs.inspect');
     Route::post('/jobs/{job}/inspect', [TechnicianCaptureController::class, 'inspectStore'])->name('jobs.inspect.store');
@@ -206,19 +224,14 @@ Route::middleware(['auth', 'role:field-technician'])->prefix('technician')->name
 
 // Client User
 Route::middleware(['auth', 'role:client-user'])->prefix('client')->name('client.')->group(function () {
-    Route::get('/dashboard', function () {
-        /** @var \App\Models\User $user */
-        $user = \Illuminate\Support\Facades\Auth::user();
-        $accessibleJobs = \App\Models\Job::where('client_id', $user->client_id)
-            ->whereIn('status', ['issued', 'closed'])
-            ->where('certificate_accessible', true)
-            ->with(['site'])
-            ->latest()
-            ->get();
-        return view('client.dashboard', compact('accessibleJobs'));
-    })->name('dashboard');
-
-    Route::get('/certificates/{job}', [JobController::class, 'certificate'])->name('certificates.download');
+    Route::get('/dashboard',              [ClientDashboardController::class, 'index'])->name('dashboard');
+    Route::get('/sites',                  [ClientSiteController::class,      'index'])->name('sites.index');
+    Route::get('/assets',                 [ClientAssetController::class,     'index'])->name('assets.index');
+    Route::get('/assets/{asset}',         [ClientAssetController::class,     'show'])->name('assets.show');
+    Route::get('/reports',                [ClientReportController::class,    'index'])->name('reports.index');
+    Route::get('/certificates/{job}',     [JobController::class, 'certificate'])->name('certificates.download');
+    Route::get('/feedback',               [ClientFeedbackController::class, 'index'])->name('feedback.index');
+    Route::post('/feedback',              [ClientFeedbackController::class, 'store'])->name('feedback.store');
 });
 
 // Notification actions (all authenticated users)

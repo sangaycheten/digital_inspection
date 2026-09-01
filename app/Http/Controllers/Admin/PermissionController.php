@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\MenuSequence;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Spatie\Permission\Models\Permission;
 
@@ -12,13 +14,16 @@ class PermissionController extends Controller
 {
     public function index(): View
     {
+        $moduleOrder  = config('navigation.module_order');
+        $moduleLabels = config('navigation.module_labels');
+
         $permissionGroups = Permission::all()
             ->groupBy(fn ($p) => $p->module ?? 'Ungrouped')
-            ->sortKeys();
+            ->sortBy(fn ($_, $module) => ($pos = array_search($module, $moduleOrder)) !== false ? $pos : 999);
 
-        $modules = $permissionGroups->keys()->sort()->values();
+        $modules = $permissionGroups->keys()->values();
 
-        return view('admin.permissions.index', compact('permissionGroups', 'modules'));
+        return view('admin.permissions.index', compact('permissionGroups', 'modules', 'moduleLabels'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -48,8 +53,16 @@ class PermissionController extends Controller
 
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
+        // Auto-create a disabled menu item so the admin can enable and configure it
+        $menuKey  = Str::slug($permission->name);
+        $maxSeq   = MenuSequence::where('role', 'system-administrator')->whereNull('parent_key')->max('sequence') ?? 0;
+        MenuSequence::firstOrCreate(
+            ['role' => 'system-administrator', 'key' => $menuKey, 'parent_key' => null],
+            ['section' => 'Operations', 'permission' => $permission->name, 'sequence' => $maxSeq + 1, 'enabled' => false]
+        );
+
         return redirect()->route('admin.permissions.index')
-            ->with('success', "Permission \"{$permission->name}\" created successfully.");
+            ->with('success', "Permission \"{$permission->name}\" created. A disabled menu item was added — enable it in Menu Elements when ready.");
     }
 
     public function destroy(Permission $permission): RedirectResponse

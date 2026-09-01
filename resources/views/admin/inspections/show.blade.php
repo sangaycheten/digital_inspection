@@ -93,7 +93,7 @@
                                 </tr>
                                 <tr>
                                     <td class="text-muted ps-0 fs-13">Date</td>
-                                    <td class="fs-13">{{ $inspection->inspection_date->format('d M Y') }}</td>
+                                    <td class="fs-13">{{ site_time($inspection->inspection_date, $inspection->job->site->timezone, 'd M Y') }}</td>
                                 </tr>
                                 <tr>
                                     <td class="text-muted ps-0 fs-13">Result</td>
@@ -119,7 +119,7 @@
                                 </tr>
                                 <tr>
                                     <td class="text-muted ps-0 fs-13">Submitted</td>
-                                    <td class="fs-13 text-muted">{{ $inspection->created_at->format('d M Y H:i') }}</td>
+                                    <td class="fs-13 text-muted">{{ site_time($inspection->created_at, $inspection->job->site->timezone) }}</td>
                                 </tr>
                             </table>
                         </div>

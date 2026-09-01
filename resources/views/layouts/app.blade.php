@@ -371,5 +371,17 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
 
     @stack('scripts')
+
+    <script>
+    document.addEventListener('submit', function (e) {
+        const form = e.target;
+        const btn  = form.querySelector('[type="submit"]');
+        if (!btn || btn.dataset.noSpinner) return;
+        btn.disabled = true;
+        const icon = btn.querySelector('i');
+        const spinner = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>';
+        btn.innerHTML = spinner + (btn.dataset.spinnerLabel || btn.innerText.trim() || 'Saving…');
+    }, true);
+    </script>
 </body>
 </html>

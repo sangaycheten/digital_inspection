@@ -45,7 +45,7 @@
                         <div class="row g-3 mb-3" style="max-width:700px;">
                             <div class="col-md-6">
                                 <label class="form-label fw-medium">Asset Type</label>
-                                <select id="createAssetType" class="form-select">
+                                <select id="createAssetType" class="form-select" onchange="regenerateAllAutoKeys()">
                                     <option value="">— Not asset-specific —</option>
                                     @foreach($assetTypes as $val => $label)
                                     <option value="{{ $val }}" {{ old('asset_type') === $val ? 'selected' : '' }}>{{ $label }}</option>
@@ -127,8 +127,8 @@
                     </div>
                     <div class="col-md-5">
                         <label class="form-label form-label-sm">Key <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control form-control-sm font-monospace q-key"
-                               maxlength="100" placeholder="e.g. roof_condition">
+                        <input type="text" class="form-control form-control-sm font-monospace q-key bg-light"
+                               maxlength="100" placeholder="Auto-generated" readonly>
                     </div>
                 </div>
                 <div class="q-options-preview mb-2 p-2 rounded border bg-light" style="display:none;">
@@ -190,8 +190,8 @@
                         </div>
                         <div class="col-md-5">
                             <label class="form-label form-label-sm">Key <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control form-control-sm font-monospace sq-parent-key"
-                                   maxlength="100" placeholder="e.g. is_operational">
+                            <input type="text" class="form-control form-control-sm font-monospace sq-parent-key bg-light"
+                                   maxlength="100" placeholder="Auto-generated" readonly>
                         </div>
                     </div>
                     <div class="row g-2 align-items-center">
@@ -281,6 +281,69 @@
         } else { prevEl.style.display = 'none'; }
     }
 
+    // ── Auto key generation ──────────────────────────────────────────────────
+    const TYPE_ABBR = { switch:'sw', text:'txt', number:'num', option_list:'opt',
+                        sub_questionnaire:'sub', date:'dt', textarea:'ta', photo:'photo' };
+
+    function slugify(str) {
+        return (str||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+    }
+
+    function collectUsedKeys(skipEl) {
+        const keys = new Set();
+        document.querySelectorAll('#qRowsContainer .q-key, #qRowsContainer .sq-parent-key, #qRowsContainer .sq-key').forEach(el => {
+            if (el !== skipEl && el.value) keys.add(el.value);
+        });
+        return keys;
+    }
+
+    function buildKeyBase(dataType) {
+        const assetVal  = document.getElementById('createAssetType').value;
+        const assetSlug = assetVal ? slugify(assetVal) : 'gen';
+        const typeSlug  = TYPE_ABBR[dataType] || slugify(dataType) || 'q';
+        return assetSlug + '_' + typeSlug;
+    }
+
+    function makeUniqueKey(base, usedKeys) {
+        let n = 1, key;
+        do { key = base + '_' + n++; } while (usedKeys.has(key));
+        return key;
+    }
+
+    function autoFillKey(inputEl, dataType) {
+        if (!inputEl || !dataType || inputEl.dataset.auto === 'false') return;
+        const base = buildKeyBase(dataType);
+        inputEl.value = makeUniqueKey(base, collectUsedKeys(inputEl));
+        inputEl.dataset.auto = 'true';
+    }
+
+    function attachKeyListener(inputEl) {
+        if (!inputEl) return;
+        inputEl.dataset.auto = 'true';
+        inputEl.readOnly = true;
+        inputEl.classList.add('bg-light');
+    }
+
+    function regenerateAllAutoKeys() {
+        const usedKeys = new Set();
+        document.querySelectorAll('#qRowsContainer .q-key, #qRowsContainer .sq-parent-key, #qRowsContainer .sq-key').forEach(el => {
+            if (el.dataset.auto === 'false') { if (el.value) usedKeys.add(el.value); return; }
+            let dataType = '';
+            if (el.classList.contains('q-key')) {
+                dataType = el.closest('.q-row')?.querySelector('.q-type-select')?.value || '';
+            } else if (el.classList.contains('sq-parent-key')) {
+                dataType = 'switch';
+            } else if (el.classList.contains('sq-key')) {
+                dataType = el.closest('.sq-row')?.querySelector('.sq-type-select')?.value || '';
+            }
+            if (!dataType) return;
+            const base = buildKeyBase(dataType);
+            const key  = makeUniqueKey(base, usedKeys);
+            el.value   = key;
+            usedKeys.add(key);
+        });
+    }
+
     // ── Outer row management ─────────────────────────────────────────────────
     function addQRow(prefill) {
         prefill = prefill || {};
@@ -291,6 +354,8 @@
         updateRowNumbers();
 
         const liveRow = [...document.querySelectorAll('#qRowsContainer .q-row')].at(-1);
+        attachKeyListener(liveRow.querySelector('.q-key'));
+        attachKeyListener(liveRow.querySelector('.sq-parent-key'));
         if (prefill.name)   liveRow.querySelector('.q-name').value   = prefill.name;
         if (prefill.key)    liveRow.querySelector('.q-key').value    = prefill.key;
         if (prefill.status) liveRow.querySelector('.q-status').value = prefill.status;
@@ -344,11 +409,13 @@
             }
             const sqCont = row.querySelector('.sq-container');
             if (sqCont && sqCont.querySelectorAll('.sq-row').length === 0) addSubQRow(row);
+            autoFillKey(row.querySelector('.sq-parent-key'), 'switch');
             return;
         }
 
         stdSection.style.display = '';
         subSection.style.display = 'none';
+        if (type) autoFillKey(row.querySelector('.q-key'), type);
         if (!TYPES_WITH_OPTS.includes(type)) return;
 
         ftWrap.style.display = '';
@@ -403,8 +470,8 @@
                 </div>
                 <div class="col-md-5">
                     <label class="form-label form-label-sm">Key <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control form-control-sm font-monospace sq-key"
-                           maxlength="100" value="${sqEsc(prefill.key || '')}" placeholder="sub_key">
+                    <input type="text" class="form-control form-control-sm font-monospace sq-key bg-light"
+                           maxlength="100" value="${sqEsc(prefill.key || '')}" placeholder="Auto-generated" readonly>
                 </div>
             </div>
             <div class="row g-2 mb-2">
@@ -456,6 +523,7 @@
             </div>`;
 
         container.appendChild(div);
+        attachKeyListener(div.querySelector('.sq-key'));
         updateSqRemoveBtns(qRow);
 
         if (prefill.type) {
@@ -492,6 +560,7 @@
         prev.style.display = 'none';
         ftSel.innerHTML = '<option value="">— Select option set —</option>';
         ftSel.disabled = true; ftWrap.style.display = 'none';
+        if (type) autoFillKey(row.querySelector('.sq-key'), type);
         if (!TYPES_WITH_OPTS.includes(type)) return;
         ftWrap.style.display = '';
         label.innerHTML = (type === 'switch' ? 'Switch Option Set' : 'Option List Set')

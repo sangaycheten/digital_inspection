@@ -54,6 +54,7 @@ class Job extends Model
         'work_type',
         'status',
         'scheduled_date',
+        'scheduled_time',
         'scope_notes',
         'created_by',
         'certificate_sent_at',
@@ -122,6 +123,11 @@ class Job extends Model
     public function inspectionRecords(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(InspectionRecord::class, 'job_id');
+    }
+
+    public function feedbacks(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\App\Models\ClientFeedback::class, 'job_id');
     }
 
     public function assignedBuildingIdsForTechnician(string $userId): \Illuminate\Support\Collection

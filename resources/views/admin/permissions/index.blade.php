@@ -48,7 +48,7 @@
                     <div class="border-bottom">
                         <div class="px-3 py-2 bg-light">
                             <span class="fw-semibold text-muted fs-12 text-uppercase">
-                                <i class="ri-apps-line me-1"></i>{{ $module }}
+                                <i class="ri-apps-line me-1"></i>{{ $moduleLabels[$module] ?? $module }}
                                 <span class="badge bg-secondary ms-1">{{ $permissions->count() }}</span>
                             </span>
                         </div>
@@ -56,7 +56,7 @@
                             @foreach($permissions as $permission)
                             <div class="d-flex align-items-center gap-1">
                                 <span class="badge bg-secondary-subtle text-secondary fs-12 fw-normal px-2 py-1">
-                                    {{ ucfirst($permission->name) }}
+                                    {{ Str::title($permission->name) }}
                                 </span>
                                 <button type="button"
                                         class="btn btn-xs btn-link text-danger p-0"

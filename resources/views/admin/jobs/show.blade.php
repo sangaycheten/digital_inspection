@@ -130,11 +130,21 @@
                                         </tr>
                                         <tr>
                                             <td class="text-muted ps-0 fs-13">Scheduled</td>
-                                            <td class="fs-13">{{ $job->scheduled_date?->format('d M Y') ?? '—' }}</td>
+                                            <td class="fs-13">
+                                                @if($job->scheduled_date)
+                                                    {{ $job->scheduled_date->format('d M Y') }}
+                                                    @if($job->scheduled_time)
+                                                        {{ \Carbon\Carbon::parse($job->scheduled_time)->format('H:i') }}
+                                                    @endif
+                                                    <span class="text-muted ms-1">{{ \Carbon\Carbon::now($job->site->timezone)->format('T') }}</span>
+                                                @else
+                                                    —
+                                                @endif
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td class="text-muted ps-0 fs-13">Created</td>
-                                            <td class="fs-13">{{ $job->created_at->format('d M Y') }}</td>
+                                            <td class="fs-13">{{ site_time($job->created_at, $job->site->timezone) }}</td>
                                         </tr>
                                         <tr>
                                             <td class="text-muted ps-0 fs-13">Created by</td>
@@ -447,7 +457,7 @@
                     @if($job->certificate_sent_at)
                     <p class="text-muted fs-11 text-center mb-2">
                         <i class="ri-checkbox-circle-line text-success me-1"></i>
-                        Sent {{ $job->certificate_sent_at->format('d M Y, H:i') }}
+                        Sent {{ site_time($job->certificate_sent_at, $job->site->timezone) }}
                     </p>
                     @endif
                     <p class="text-muted fs-11 mb-2">

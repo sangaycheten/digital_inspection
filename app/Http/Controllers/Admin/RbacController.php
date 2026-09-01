@@ -15,11 +15,14 @@ class RbacController extends Controller
     {
         $roles = Role::with(['permissions', 'users'])->get();
 
+        $moduleOrder  = config('navigation.module_order');
+        $moduleLabels = config('navigation.module_labels');
+
         $permissionGroups = Permission::all()
             ->groupBy(fn ($p) => $p->module ?? 'Ungrouped')
-            ->sortKeys();
+            ->sortBy(fn ($_, $module) => ($pos = array_search($module, $moduleOrder)) !== false ? $pos : 999);
 
-        return view('admin.rbac.index', compact('roles', 'permissionGroups'));
+        return view('admin.rbac.index', compact('roles', 'permissionGroups', 'moduleLabels'));
     }
 
     // Permissions in these modules can only be held by system-administrator or manager

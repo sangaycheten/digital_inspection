@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Mail\UserCredentialsMail;
 use App\Models\Client;
 use App\Models\Site;
 use App\Models\User;
@@ -10,6 +11,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules;
 use Illuminate\View\View;
@@ -64,6 +67,7 @@ class RegisteredUserController extends Controller
                                 ? [Rule::exists('sites', 'id')->where('client_id', $request->client_id)]
                                 : ['exists:sites,id'],
             'password'   => ['required', 'confirmed', Rules\Password::defaults()],
+            'timezone'   => ['required', 'string', 'timezone:all'],
         ]);
 
         $user = User::create([
@@ -72,6 +76,7 @@ class RegisteredUserController extends Controller
             'password'          => Hash::make($request->password),
             'email_verified_at' => Carbon::now(),
             'client_id'         => $request->role === 'client-user' ? $request->client_id : null,
+            'timezone'          => $request->timezone,
             'created_by'        => request()->user()?->id,
             'updated_by'        => request()->user()?->id,
         ]);
@@ -127,6 +132,7 @@ class RegisteredUserController extends Controller
                                 ? [Rule::exists('sites', 'id')->where('client_id', $request->client_id)]
                                 : ['exists:sites,id'],
             'password'   => ['nullable', 'confirmed', Rules\Password::defaults()],
+            'timezone'   => ['required', 'string', 'timezone:all'],
         ]);
 
         $oldRole     = $user->roles->first()?->name;
@@ -159,11 +165,16 @@ class RegisteredUserController extends Controller
             $oldProps['client_id'] = $user->client_id;
             $changes['client_id']  = $request->client_id;
         }
+        if ($user->timezone !== $request->timezone) {
+            $oldProps['timezone'] = $user->timezone;
+            $changes['timezone']  = $request->timezone;
+        }
 
         $user->update([
             'name'       => $request->name,
             'email'      => $request->email,
             'client_id'  => $request->role === 'client-user' ? $request->client_id : null,
+            'timezone'   => $request->timezone,
             'updated_by' => request()->user()?->id,
         ]);
 
@@ -217,6 +228,30 @@ class RegisteredUserController extends Controller
 
         return redirect()->route('admin.users.index')
             ->with('success', "User {$name} deleted successfully.");
+    }
+
+    public function sendCredentials(User $user): RedirectResponse
+    {
+        $temporaryPassword = Str::random(10);
+        $user->update([
+            'password'            => Hash::make($temporaryPassword),
+            'credentials_sent_at' => now(),
+        ]);
+
+        try {
+            Mail::to($user->email)->send(new UserCredentialsMail($user, $temporaryPassword));
+        } catch (\Throwable) {
+            $user->update(['credentials_sent_at' => null]);
+            return back()->with('error', "Failed to send credentials to {$user->email}. Please check mail configuration.");
+        }
+
+        activity()->useLog('user')
+            ->causedBy(request()->user())
+            ->performedOn($user)
+            ->event('credentials_sent')
+            ->log("Credentials sent to: {$user->email}");
+
+        return back()->with('success', "Login credentials sent to {$user->email}.");
     }
 
     public function restore(int $id): RedirectResponse

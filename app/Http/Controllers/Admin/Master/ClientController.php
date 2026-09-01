@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin\Master;
 
 use App\Http\Controllers\Controller;
 use App\Models\Client;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -13,13 +14,15 @@ class ClientController extends Controller
 {
     public function index(Request $request): View
     {
-        $clients = Client::withCount('sites')
+        $clients = Client::withCount('sites')->with('manager')
             ->when($request->search, fn ($q) => $q->where('name', 'like', "%{$request->search}%")
                 ->orWhere('custom_client_code', 'like', "%{$request->search}%"))
             ->when($request->status, fn ($q) => $q->where('status', $request->status))
             ->latest()->paginate(15)->withQueryString();
 
-        return view('admin.master.clients.index', compact('clients'));
+        $managers = User::role('manager')->orderBy('name')->get(['id', 'name', 'email']);
+
+        return view('admin.master.clients.index', compact('clients', 'managers'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -30,6 +33,7 @@ class ClientController extends Controller
             'custom_client_code'   => ['required', 'string', 'max:20', 'unique:clients,custom_client_code'],
             'billing_contact_info' => ['nullable', 'string'],
             'status'               => ['required', 'in:active,inactive'],
+            'manager_id'           => ['nullable', 'exists:users,id'],
             'logo'                 => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,svg', 'max:2048'],
         ]);
 
@@ -57,6 +61,7 @@ class ClientController extends Controller
             'custom_client_code'   => ['required', 'string', 'max:20', "unique:clients,custom_client_code,{$client->id}"],
             'billing_contact_info' => ['nullable', 'string'],
             'status'               => ['required', 'in:active,inactive'],
+            'manager_id'           => ['nullable', 'exists:users,id'],
             'logo'                 => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,svg', 'max:2048'],
         ]);
 

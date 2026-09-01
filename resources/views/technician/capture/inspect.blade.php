@@ -75,7 +75,7 @@
     </div>
     @endif
 
-    <form method="POST" action="{{ route('technician.jobs.inspect.store', $job) }}" id="inspectForm">
+    <form method="POST" action="{{ route('technician.jobs.inspect.store', $job) }}" id="inspectForm" enctype="multipart/form-data">
         @csrf
         <input type="hidden" name="save_as_draft" id="saveDraftInput" value="0">
 
@@ -428,6 +428,15 @@
                                                 <p class="fs-13 mb-0">{{ $lockedRec->required_action }}</p>
                                             </div>
                                             @endif
+                                            @if($lockedRec->photo_path)
+                                            <div>
+                                                <p class="fs-12 text-muted mb-1"><i class="ri-camera-line me-1"></i>Photo</p>
+                                                <a href="{{ \Illuminate\Support\Facades\Storage::url($lockedRec->photo_path) }}" target="_blank">
+                                                    <img src="{{ \Illuminate\Support\Facades\Storage::url($lockedRec->photo_path) }}"
+                                                         class="img-thumbnail" style="max-height:150px">
+                                                </a>
+                                            </div>
+                                            @endif
                                         </div>
                                     </div>
                                 </div>
@@ -576,6 +585,22 @@
                                                 <textarea name="assets[{{ $asset->id }}][required_action]"
                                                           class="form-control form-control-sm" rows="2"
                                                           placeholder="Action required…">{{ old("assets.{$asset->id}.required_action") ?? ($rejectionNote ? '' : $existingRec?->required_action) }}</textarea>
+                                            </div>
+                                            <div>
+                                                <label class="form-label fs-12 text-muted mb-1">
+                                                    <i class="ri-camera-line me-1"></i>Photo
+                                                </label>
+                                                @if($existingRec?->photo_path)
+                                                <div class="mb-2">
+                                                    <img src="{{ \Illuminate\Support\Facades\Storage::url($existingRec->photo_path) }}"
+                                                         class="img-thumbnail" style="max-height:120px; cursor:pointer"
+                                                         onclick="window.open(this.src,'_blank')">
+                                                    <div class="fs-11 text-muted mt-1">Current photo — upload a new one to replace it</div>
+                                                </div>
+                                                @endif
+                                                <input type="file" name="photos[{{ $asset->id }}]"
+                                                       class="form-control form-control-sm"
+                                                       accept="image/*">
                                             </div>
                                         </div>
 

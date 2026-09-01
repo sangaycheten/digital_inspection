@@ -9,6 +9,7 @@ use App\Models\Job;
 use App\Models\MasterLookup;
 use App\Models\Site;
 use App\Models\User;
+use App\Mail\CertificateAccessGrantedMail;
 use App\Mail\InspectionCertificateMail;
 use App\Notifications\JobAssignedNotification;
 use App\Models\InspectionRecord;
@@ -60,6 +61,7 @@ class JobController extends Controller
             'client_id'       => ['required', 'exists:clients,id'],
             'work_type'       => ['required', 'in:' . implode(',', array_keys(Job::WORK_TYPES))],
             'scheduled_date'  => ['nullable', 'date'],
+            'scheduled_time'  => ['nullable', 'date_format:H:i'],
             'scope_notes'     => ['nullable', 'string'],
             'assignments'     => ['required', 'array', 'min:1'],
             'assignments.*'   => ['nullable', 'array'],
@@ -88,6 +90,7 @@ class JobController extends Controller
             'client_id'      => $data['client_id'],
             'work_type'      => $data['work_type'],
             'scheduled_date' => $data['scheduled_date'] ?? null,
+            'scheduled_time' => $data['scheduled_time'] ?? null,
             'scope_notes'    => $data['scope_notes'] ?? null,
             'created_by'     => Auth::id(),
         ]);
@@ -140,6 +143,7 @@ class JobController extends Controller
             'work_type'       => ['required', 'in:' . implode(',', array_keys(Job::WORK_TYPES))],
             'status'          => ['required', 'in:' . implode(',', array_keys(Job::STATUSES))],
             'scheduled_date'  => ['nullable', 'date'],
+            'scheduled_time'  => ['nullable', 'date_format:H:i'],
             'scope_notes'     => ['nullable', 'string'],
             'assignments'     => ['required', 'array', 'min:1'],
             'assignments.*'   => ['nullable', 'array'],
@@ -177,6 +181,7 @@ class JobController extends Controller
             'work_type'      => $data['work_type'],
             'status'         => $data['status'],
             'scheduled_date' => $data['scheduled_date'] ?? null,
+            'scheduled_time' => $data['scheduled_time'] ?? null,
             'scope_notes'    => $data['scope_notes'] ?? null,
         ]);
 
@@ -240,9 +245,23 @@ class JobController extends Controller
 
         $job->update(['certificate_accessible' => !$job->certificate_accessible]);
 
-        $msg = $job->certificate_accessible
-            ? 'Client portal access enabled — client can now download the certificate.'
-            : 'Client portal access revoked.';
+        if ($job->certificate_accessible) {
+            $job->load('site');
+            $recipients = User::role('client-user')
+                ->where('client_id', $job->client_id)
+                ->whereHas('sites', fn ($q) => $q->where('sites.id', $job->site_id))
+                ->get();
+
+            foreach ($recipients as $recipient) {
+                try {
+                    Mail::to($recipient->email)->send(new CertificateAccessGrantedMail($job));
+                } catch (\Throwable) {}
+            }
+
+            $msg = 'Client portal access enabled — client users have been notified by email.';
+        } else {
+            $msg = 'Client portal access revoked.';
+        }
 
         return back()->with('success', $msg);
     }

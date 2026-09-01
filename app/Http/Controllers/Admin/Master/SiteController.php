@@ -33,6 +33,7 @@ class SiteController extends Controller
             'latitude'   => ['nullable', 'numeric', 'between:-90,90'],
             'longitude'  => ['nullable', 'numeric', 'between:-180,180'],
             'site_notes' => ['nullable', 'string'],
+            'timezone'   => ['required', 'string', 'timezone:all'],
         ]);
 
         if (!empty($data['latitude']) && !empty($data['longitude'])) {
@@ -66,6 +67,7 @@ class SiteController extends Controller
             'latitude'   => ['nullable', 'numeric', 'between:-90,90'],
             'longitude'  => ['nullable', 'numeric', 'between:-180,180'],
             'site_notes' => ['nullable', 'string'],
+            'timezone'   => ['required', 'string', 'timezone:all'],
         ]);
 
         if (!empty($data['latitude']) && !empty($data['longitude'])) {

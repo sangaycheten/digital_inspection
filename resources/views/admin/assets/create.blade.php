@@ -39,6 +39,7 @@
                                     <option value="">— Select Site —</option>
                                     @foreach($sites as $site)
                                     <option value="{{ $site->id }}"
+                                        data-client-code="{{ $site->client->custom_client_code ?? '' }}"
                                         {{ old('site_id') == $site->id ? 'selected' : '' }}>
                                         {{ $site->name ?? $site->address }}
                                         @if($site->client) ({{ $site->client->name }}) @endif
@@ -91,30 +92,25 @@
                             {{-- Single mode: asset_code + group_id --}}
                             <div class="col-md-4 single-only">
                                 <label class="form-label">Asset Code <span class="text-danger">*</span></label>
-                                <input type="text" name="asset_code"
-                                       class="form-control @error('asset_code') is-invalid @enderror"
-                                       value="{{ old('asset_code') }}" placeholder="e.g. AP01">
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light text-muted" id="singleClientCodeBadge" style="display:none"></span>
+                                    <input type="text" name="asset_code"
+                                           class="form-control @error('asset_code') is-invalid @enderror"
+                                           value="{{ old('asset_code') }}" placeholder="e.g. AP01">
+                                </div>
                                 <div class="form-text">Must be unique within the selected site.</div>
                                 @error('asset_code')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             </div>
-                            <div class="col-md-4 single-only">
-                                <label class="form-label">Group ID
-                                    <span class="text-muted fs-11"><i class="ri-information-line"
-                                        title="Optional: links assets from the same batch"></i></span>
-                                </label>
-                                <input type="text" name="group_id"
-                                       class="form-control @error('group_id') is-invalid @enderror"
-                                       value="{{ old('group_id') }}" placeholder="Optional">
-                                @error('group_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            </div>
-
-                            {{-- Range mode: prefix / start / end / quantity / indicator --}}
+{{-- Range mode: prefix / start / end / quantity / indicator --}}
                             <div class="col-md-3 range-only">
                                 <label class="form-label">Prefix <span class="text-danger">*</span></label>
-                                <input type="text" name="prefix" id="rangePrefix"
-                                       class="form-control @error('prefix') is-invalid @enderror"
-                                       value="{{ old('prefix') }}" placeholder="e.g. AP"
-                                       oninput="updateIndicator()">
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light text-muted" id="rangeClientCodeBadge" style="display:none"></span>
+                                    <input type="text" name="prefix" id="rangePrefix"
+                                           class="form-control @error('prefix') is-invalid @enderror"
+                                           value="{{ old('prefix') }}" placeholder="e.g. AP"
+                                           oninput="updateIndicator()">
+                                </div>
                                 @error('prefix')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             </div>
                             <div class="col-md-2 range-only">
@@ -279,6 +275,8 @@
     );
     const oldBuildingId = '{{ old('building_id') }}';
 
+    let currentClientCode = '';
+
     function loadBuildings(siteId, selectedId) {
         const sel = document.getElementById('buildingSelect');
         sel.innerHTML = '<option value="">— Select Building —</option>';
@@ -291,12 +289,35 @@
         });
     }
 
+    function updateClientCodeBadges() {
+        const display = currentClientCode ? currentClientCode + '-' : '';
+        ['singleClientCodeBadge', 'rangeClientCodeBadge'].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (display) {
+                el.textContent = display;
+                el.style.display = '';
+            } else {
+                el.style.display = 'none';
+            }
+        });
+    }
+
     document.getElementById('siteSelect').addEventListener('change', function () {
+        const opt = this.options[this.selectedIndex];
+        currentClientCode = opt.dataset.clientCode || '';
         loadBuildings(this.value, null);
+        updateClientCodeBadges();
+        validateRange();
     });
 
     const initSite = document.getElementById('siteSelect').value;
-    if (initSite) loadBuildings(initSite, oldBuildingId);
+    if (initSite) {
+        const initOpt = document.getElementById('siteSelect').options[document.getElementById('siteSelect').selectedIndex];
+        currentClientCode = initOpt.dataset.clientCode || '';
+        loadBuildings(initSite, oldBuildingId);
+        updateClientCodeBadges();
+    }
 
     // ── Mode toggle ──────────────────────────────────────────────────────────
 
@@ -329,6 +350,7 @@
 
         if (!isNaN(start) && !isNaN(end) && end >= start) {
             qtyField.value = end - start + 1;
+            document.getElementById('rangeEnd').classList.remove('is-invalid');
         } else {
             qtyField.value = '';
         }
@@ -351,15 +373,25 @@
         const prefix   = document.getElementById('rangePrefix').value.trim();
         const indicator = document.getElementById('rangeIndicator');
         const btn       = document.getElementById('submitBtn');
+        const endInput  = document.getElementById('rangeEnd');
 
-        if (isNaN(start) || isNaN(end) || isNaN(qty)) {
+        if (isNaN(start) || isNaN(end)) {
             indicator.innerHTML = '';
+            endInput.classList.remove('is-invalid');
             btn.disabled = true;
             return;
         }
 
         if (end < start) {
-            indicator.innerHTML = '<span class="text-danger"><i class="ri-error-warning-line"></i> End must be ≥ Start</span>';
+            endInput.classList.add('is-invalid');
+            indicator.innerHTML = '<div class="alert alert-danger py-2 px-3 mb-0 fs-13"><i class="ri-error-warning-line me-1"></i>End number cannot be less than Start number.</div>';
+            btn.disabled = true;
+            return;
+        }
+
+        endInput.classList.remove('is-invalid');
+        if (isNaN(qty)) {
+            indicator.innerHTML = '';
             btn.disabled = true;
             return;
         }
@@ -374,9 +406,10 @@
             return;
         }
 
-        const first = (prefix || '') + pad(start);
-        const last  = (prefix || '') + pad(end);
-        indicator.innerHTML = `<span class="text-success"><i class="ri-check-line"></i> ${first}–${last}</span>`;
+        const fullPrefix = currentClientCode ? currentClientCode + '-' + (prefix || '') : (prefix || '');
+        const first = fullPrefix + pad(start);
+        const last  = fullPrefix + pad(end);
+        indicator.innerHTML = `<span class="text-success"><i class="ri-check-line me-1"></i>${first} to ${last}</span>`;
         document.getElementById('submitLabel').textContent = `Create ${expected} Assets`;
         btn.disabled = false;
     }

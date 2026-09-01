@@ -1,6 +1,14 @@
 <x-app-layout>
     <x-slot name="title">Edit Job</x-slot>
 
+    @push('styles')
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+    @endpush
+
+    @push('scripts')
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
+    @endpush
+
     @php
     $statusColors = [
         'new'                    => 'secondary',
@@ -85,12 +93,24 @@
                                 </select>
                                 @error('work_type')<div class="invalid-feedback">{!! $message !!}</div>@enderror
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <label class="form-label">Scheduled Date</label>
                                 <input type="date" name="scheduled_date"
                                        class="form-control @error('scheduled_date') is-invalid @enderror"
                                        value="{{ old('scheduled_date', $job->scheduled_date?->format('Y-m-d')) }}">
                                 @error('scheduled_date')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Scheduled Time</label>
+                                <input type="time" name="scheduled_time"
+                                       class="form-control @error('scheduled_time') is-invalid @enderror"
+                                       value="{{ old('scheduled_time', $job->scheduled_time) }}">
+                                @error('scheduled_time')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                <div class="form-text">
+                                    <i class="ri-time-zone-line me-1"></i>Site time:
+                                    {{ \Carbon\Carbon::now($job->site->timezone)->format('T') }}
+                                    ({{ $job->site->timezone }})
+                                </div>
                             </div>
                             <div class="col-12">
                                 <label class="form-label">Scope Notes</label>
@@ -122,12 +142,15 @@
                                 <thead class="table-light">
                                     <tr>
                                         <th class="ps-3" style="width:200px">Building</th>
-                                        <th>Assign Technicians <span class="text-muted fw-normal fs-12">(tick one or more)</span></th>
+                                        <th>Assign Technicians</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @foreach($buildings as $building)
-                                    @php $alreadyDone = $job->work_type === 'first_inspection' && in_array($building->id, $firstInspectedBuildingIds->all()); @endphp
+                                    @php
+                                        $alreadyDone   = $job->work_type === 'first_inspection' && in_array($building->id, $firstInspectedBuildingIds->all());
+                                        $selectedTechs = $editAssignments[$building->id] ?? [];
+                                    @endphp
                                     <tr>
                                         <td class="ps-3 fw-medium fs-13">{{ $building->name_or_level }}</td>
                                         <td>
@@ -136,18 +159,17 @@
                                                 <i class="ri-checkbox-circle-line me-1"></i>First Inspection Completed
                                             </span>
                                             @else
-                                            <div class="d-flex flex-wrap gap-1 py-1">
+                                            <select name="assignments[{{ $building->id }}][]"
+                                                    id="techSelect{{ $building->id }}"
+                                                    class="form-select tech-multiselect"
+                                                    multiple>
                                                 @foreach($technicians as $tech)
-                                                @php $chkId = 'chk_' . $building->id . '_' . $tech->id; @endphp
-                                                <div class="form-check form-check-inline me-3">
-                                                    <input class="form-check-input" type="checkbox" id="{{ $chkId }}"
-                                                           name="assignments[{{ $building->id }}][]"
-                                                           value="{{ $tech->id }}"
-                                                           {{ in_array($tech->id, $editAssignments[$building->id] ?? []) ? 'checked' : '' }}>
-                                                    <label class="form-check-label fs-13" for="{{ $chkId }}">{{ $tech->name }}</label>
-                                                </div>
+                                                <option value="{{ $tech->id }}"
+                                                    {{ in_array($tech->id, $selectedTechs) ? 'selected' : '' }}>
+                                                    {{ $tech->name }}
+                                                </option>
                                                 @endforeach
-                                            </div>
+                                            </select>
                                             @endif
                                         </td>
                                     </tr>
@@ -213,5 +235,20 @@
             </div>
         </div>
     </form>
+
+    @push('scripts')
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('.tech-multiselect').forEach(function (el) {
+            new TomSelect(el, {
+                plugins: ['remove_button'],
+                placeholder: 'Select technicians...',
+                create: false,
+                maxOptions: null,
+            });
+        });
+    });
+    </script>
+    @endpush
 
 </x-app-layout>

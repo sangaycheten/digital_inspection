@@ -1,6 +1,14 @@
 <x-app-layout>
     <x-slot name="title">Schedule Job</x-slot>
 
+    @push('styles')
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+    @endpush
+
+    @push('scripts')
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
+    @endpush
+
     <div class="row">
         <div class="col-12">
             <div class="page-title-box d-sm-flex align-items-center justify-content-between">
@@ -38,6 +46,7 @@
                                     <option value="{{ $site->id }}"
                                             data-client-id="{{ $site->client_id }}"
                                             data-client-name="{{ $site->client->name ?? '' }}"
+                                            data-timezone="{{ $site->timezone }}"
                                             {{ old('site_id') == $site->id ? 'selected' : '' }}>
                                         {{ $site->name ?? $site->address }}
                                         @if($site->client) ({{ $site->client->name }}) @endif
@@ -77,12 +86,22 @@
                                 </select>
                                 @error('work_type')<div class="invalid-feedback">{!! $message !!}</div>@enderror
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <label class="form-label">Scheduled Date</label>
                                 <input type="date" name="scheduled_date"
                                        class="form-control @error('scheduled_date') is-invalid @enderror"
                                        value="{{ old('scheduled_date') }}">
                                 @error('scheduled_date')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Scheduled Time</label>
+                                <input type="time" name="scheduled_time"
+                                       class="form-control @error('scheduled_time') is-invalid @enderror"
+                                       value="{{ old('scheduled_time') }}">
+                                @error('scheduled_time')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                <div class="form-text" id="siteTzHint" style="display:none">
+                                    <i class="ri-time-zone-line me-1"></i>Site time: <span id="siteTzLabel"></span>
+                                </div>
                             </div>
                             <div class="col-12">
                                 <label class="form-label">Scope Notes</label>
@@ -161,40 +180,71 @@
         let html = '<div class="table-responsive"><table class="table table-bordered align-middle mb-0">';
         html += '<thead class="table-light"><tr>'
             + '<th class="ps-3" style="width:200px">Building</th>'
-            + '<th>Assign Technicians <span class="text-muted fw-normal fs-12">(tick one or more)</span></th>'
+            + '<th>Assign Technicians</th>'
             + '</tr></thead><tbody>';
 
         buildings.forEach(b => {
             const alreadyDone = isFirstInspection && firstInspectedBuildings.includes(b.id);
             const oldTechs = oldAssignments[b.id] || [];
-            let checks = '';
+            let cell = '';
             if (alreadyDone) {
-                checks = '<span class="badge bg-success-subtle text-success fs-12"><i class="ri-checkbox-circle-line me-1"></i>First Inspection Completed</span>';
+                cell = '<span class="badge bg-success-subtle text-success fs-12"><i class="ri-checkbox-circle-line me-1"></i>First Inspection Completed</span>';
             } else {
-                technicians.forEach(t => {
-                    const checked = oldTechs.includes(t.id) ? 'checked' : '';
-                    const chkId = `chk_${b.id}_${t.id}`;
-                    checks += `<div class="form-check form-check-inline me-3">
-                        <input class="form-check-input" type="checkbox" id="${chkId}"
-                            name="assignments[${b.id}][]" value="${t.id}" ${checked}>
-                        <label class="form-check-label fs-13" for="${chkId}">${t.name}</label>
-                    </div>`;
-                });
+                const options = technicians.map(t => {
+                    const selected = oldTechs.includes(t.id) ? 'selected' : '';
+                    return `<option value="${t.id}" ${selected}>${t.name}</option>`;
+                }).join('');
+                cell = `<select name="assignments[${b.id}][]"
+                                id="techSelect_${b.id}"
+                                class="form-select"
+                                multiple>${options}</select>`;
             }
             html += `<tr>
                 <td class="ps-3 fw-medium fs-13">${b.name_or_level}</td>
-                <td><div class="d-flex flex-wrap align-items-center gap-1 py-1">${checks}</div></td>
+                <td>${cell}</td>
             </tr>`;
         });
 
         html += '</tbody></table></div>';
         wrap.innerHTML = html;
+
+        // Init Tom Select on each generated select
+        buildings.forEach(b => {
+            const el = document.getElementById(`techSelect_${b.id}`);
+            if (el) {
+                new TomSelect(el, {
+                    plugins: ['remove_button'],
+                    placeholder: 'Select technicians...',
+                    create: false,
+                    maxOptions: null,
+                });
+            }
+        });
+    }
+
+    function getTzAbbr(tz) {
+        try {
+            return new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'short' })
+                .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || tz;
+        } catch(e) { return tz; }
+    }
+
+    function updateSiteTzHint(tz) {
+        const hint  = document.getElementById('siteTzHint');
+        const label = document.getElementById('siteTzLabel');
+        if (tz) {
+            label.textContent = getTzAbbr(tz) + ' (' + tz + ')';
+            hint.style.display = '';
+        } else {
+            hint.style.display = 'none';
+        }
     }
 
     document.getElementById('siteSelect').addEventListener('change', function () {
         const opt = this.options[this.selectedIndex];
         document.getElementById('clientId').value      = opt.dataset.clientId || '';
         document.getElementById('clientDisplay').value = opt.dataset.clientName || '';
+        updateSiteTzHint(opt.dataset.timezone || '');
         loadMatrix(this.value);
     });
 
@@ -208,8 +258,10 @@
         const opt = document.getElementById('siteSelect').options[document.getElementById('siteSelect').selectedIndex];
         document.getElementById('clientId').value      = opt.dataset.clientId || '';
         document.getElementById('clientDisplay').value = opt.dataset.clientName || '';
+        updateSiteTzHint(opt.dataset.timezone || '');
         loadMatrix(initSite);
     }
+
     </script>
     @endpush
 

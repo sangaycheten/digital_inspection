@@ -115,7 +115,7 @@
                                     <th>Address</th>
                                     <th>Location</th>
                                     <th>Site Notes</th>
-                                    <th>Created</th>
+                                    <th>Created (Local Time)</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -142,7 +142,9 @@
                                         @endif
                                     </td>
                                     <td class="text-muted fs-12">{{ Str::limit($site->site_notes, 50) ?? '—' }}</td>
-                                    <td class="text-muted fs-12">{{ $site->created_at->format('d M Y') }}</td>
+                                    <td class="text-muted fs-12">
+                                        {{ site_time($site->created_at, $site->timezone) }}
+                                    </td>
                                     <td>
                                         <div class="hstack gap-1">
                                             <button type="button" class="btn btn-sm btn-outline-primary"
@@ -223,6 +225,19 @@
                                                                 <div class="col-12">
                                                                     <label class="form-label">Site Notes</label>
                                                                     <textarea name="site_notes" class="form-control" rows="2">{{ $site->site_notes }}</textarea>
+                                                                </div>
+                                                                <div class="col-12">
+                                                                    <input type="hidden" name="timezone" id="editTimezone{{ $site->id }}" value="{{ $site->timezone ?? 'UTC' }}">
+                                                                    <div class="d-flex align-items-center gap-2 fs-12 text-muted">
+                                                                        <i class="ri-time-zone-line"></i> Timezone:
+                                                                        <span id="editTimezoneDisplay{{ $site->id }}" class="badge bg-primary-subtle text-primary fs-12">
+                                                                            {{ $site->timezone ?? 'UTC' }}
+                                                                        </span>
+                                                                        <span id="editTimezoneLoading{{ $site->id }}" class="text-muted fs-11" style="display:none;">
+                                                                            <i class="ri-loader-4-line"></i> Detecting...
+                                                                        </span>
+                                                                    </div>
+                                                                    <div class="form-text">Auto-detected from pin location.</div>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -351,6 +366,19 @@
                                 <textarea name="site_notes" class="form-control" rows="2"
                                           placeholder="Any notes about this site...">{{ old('site_notes') }}</textarea>
                             </div>
+                            <div class="col-12">
+                                <input type="hidden" name="timezone" id="createTimezone" value="{{ old('timezone', 'UTC') }}">
+                                <div class="d-flex align-items-center gap-2 fs-12 text-muted">
+                                    <i class="ri-time-zone-line"></i> Timezone:
+                                    <span id="createTimezoneDisplay" class="badge bg-secondary-subtle text-secondary fs-12">
+                                        {{ old('timezone', 'UTC') }}
+                                    </span>
+                                    <span id="createTimezoneLoading" class="text-muted fs-11" style="display:none;">
+                                        <i class="ri-loader-4-line"></i> Detecting...
+                                    </span>
+                                </div>
+                                <div class="form-text">Auto-detected when you place a pin on the map.</div>
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -372,8 +400,39 @@
     // Registry: mapId → { map, placePin }
     const mapRegistry = {};
 
+    // ── Timezone auto-detection from coordinates ──────────────────
+    function fetchTimezone(lat, lng, inputEl, displayEl, loadingEl) {
+        if (!inputEl || !displayEl) return;
+        if (loadingEl) loadingEl.style.display = '';
+        displayEl.className = 'badge bg-secondary-subtle text-secondary fs-12';
+
+        fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&timezone=auto&forecast_days=0`)
+            .then(r => r.json())
+            .then(data => {
+                const tz = data.timezone || 'UTC';
+                inputEl.value      = tz;
+                displayEl.textContent = tz;
+                displayEl.className   = 'badge bg-success-subtle text-success fs-12';
+            })
+            .catch(() => {
+                displayEl.className = 'badge bg-warning-subtle text-warning fs-12';
+            })
+            .finally(() => { if (loadingEl) loadingEl.style.display = 'none'; });
+    }
+
     // ── Map initialisation ────────────────────────────────────────
-    function initMap(mapId, latEl, lngEl, initLat, initLng) {
+    // ── Reverse geocoding (coords → address) ─────────────────────
+    function reverseGeocode(lat, lng, addressEl) {
+        if (!addressEl) return;
+        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`, {
+            headers: { 'Accept-Language': 'en' }
+        })
+        .then(r => r.json())
+        .then(data => { if (data && data.display_name) addressEl.value = data.display_name; })
+        .catch(() => {});
+    }
+
+    function initMap(mapId, latEl, lngEl, initLat, initLng, tzInputEl, tzDisplayEl, tzLoadingEl, addressEl) {
         const hasCoords = parseFloat(initLat) && parseFloat(initLng);
         const lat  = hasCoords ? parseFloat(initLat) : DEFAULT_LAT;
         const lng  = hasCoords ? parseFloat(initLng) : DEFAULT_LNG;
@@ -384,12 +443,14 @@
 
         let marker = hasCoords ? L.marker([lat, lng]).addTo(map) : null;
 
-        function placePin(la, lo) {
+        function placePin(la, lo, skipReverseGeocode) {
             if (marker) map.removeLayer(marker);
             marker = L.marker([la, lo]).addTo(map);
             map.setView([la, lo], DEFAULT_ZOOM);
             latEl.value = parseFloat(la).toFixed(7);
             lngEl.value = parseFloat(lo).toFixed(7);
+            fetchTimezone(la, lo, tzInputEl, tzDisplayEl, tzLoadingEl);
+            if (!skipReverseGeocode) reverseGeocode(la, lo, addressEl);
         }
 
         map.on('click', function (e) { placePin(e.latlng.lat, e.latlng.lng); });
@@ -442,7 +503,7 @@
                 textareaEl.value = r.display_name;
                 hideSuggestions(ulEl);
                 if (mapRegistry[mapId]) {
-                    mapRegistry[mapId].placePin(parseFloat(r.lat), parseFloat(r.lon));
+                    mapRegistry[mapId].placePin(parseFloat(r.lat), parseFloat(r.lon), true);
                 }
             });
             ulEl.appendChild(li);
@@ -509,20 +570,28 @@
     // ── Create modal ──────────────────────────────────────────────
     document.getElementById('createSiteModal').addEventListener('shown.bs.modal', function () {
         if (mapRegistry['createMap']) { mapRegistry['createMap'].map.invalidateSize(); return; }
-        const latEl = document.getElementById('createLat');
-        const lngEl = document.getElementById('createLng');
-        initMap('createMap', latEl, lngEl, latEl.value, lngEl.value);
+        const latEl     = document.getElementById('createLat');
+        const lngEl     = document.getElementById('createLng');
+        const tzInput   = document.getElementById('createTimezone');
+        const tzDisplay = document.getElementById('createTimezoneDisplay');
+        const tzLoading = document.getElementById('createTimezoneLoading');
+        const addrEl    = document.getElementById('createAddress');
+        initMap('createMap', latEl, lngEl, latEl.value, lngEl.value, tzInput, tzDisplay, tzLoading, addrEl);
     });
 
     // ── Edit modals ───────────────────────────────────────────────
     document.querySelectorAll('[id^="editSiteModal"]').forEach(function (modal) {
         modal.addEventListener('shown.bs.modal', function () {
-            const siteId = modal.id.replace('editSiteModal', '');
-            const mapId  = 'editMap' + siteId;
+            const siteId    = modal.id.replace('editSiteModal', '');
+            const mapId     = 'editMap' + siteId;
             if (mapRegistry[mapId]) { mapRegistry[mapId].map.invalidateSize(); return; }
-            const latEl = document.getElementById('editLat' + siteId);
-            const lngEl = document.getElementById('editLng' + siteId);
-            initMap(mapId, latEl, lngEl, latEl.value, lngEl.value);
+            const latEl     = document.getElementById('editLat' + siteId);
+            const lngEl     = document.getElementById('editLng' + siteId);
+            const tzInput   = document.getElementById('editTimezone' + siteId);
+            const tzDisplay = document.getElementById('editTimezoneDisplay' + siteId);
+            const tzLoading = document.getElementById('editTimezoneLoading' + siteId);
+            const addrEl    = modal.querySelector('textarea[name="address"]');
+            initMap(mapId, latEl, lngEl, latEl.value, lngEl.value, tzInput, tzDisplay, tzLoading, addrEl);
         });
     });
 

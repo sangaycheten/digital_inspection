@@ -11,6 +11,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -44,6 +45,11 @@ class JobController extends Controller
     {
         abort_if(!$job->technicians()->where('users.id', Auth::id())->exists(), 403);
 
+        // Auto-advance new → scheduled when the scheduled date has arrived
+        if ($job->status === 'new' && $job->scheduled_date && today()->gte($job->scheduled_date)) {
+            $job->update(['status' => 'scheduled']);
+        }
+
         $job->load([
             'site',
             'client',
@@ -74,7 +80,7 @@ class JobController extends Controller
         $inspectedCount = $inspectionSummary->sum();
         $assetTypes     = MasterLookup::assetTypeMap();
 
-        return view('technician.jobs.show', compact('job', 'inspectedCount', 'totalAssets', 'inspectionSummary', 'assetTypes', 'siteAssets'));
+        return view('technician.jobs.show', compact('job', 'inspectedCount', 'totalAssets', 'inspectionSummary', 'assetTypes', 'siteAssets', 'buildingIds'));
     }
 
     public function submitForReview(Job $job): RedirectResponse
@@ -125,6 +131,10 @@ class JobController extends Controller
         abort_if(!$job->technicians()->where('users.id', Auth::id())->exists(), 403);
         abort_if($job->isClosed(), 403, 'This job is closed.');
 
+        if ($request->input('mode') === 'range') {
+            return $this->storeRangeAsset($request, $job);
+        }
+
         $data = $request->validate([
             'asset_code'              => ['required', 'string', 'max:255'],
             'asset_type'              => ['required', Rule::exists('master_lookups', 'value')->where('category', 'asset_type')],
@@ -158,5 +168,132 @@ class JobController extends Controller
 
         return redirect()->route('technician.jobs.show', $job)
             ->with('success', "Asset {$data['asset_code']} added to the register.");
+    }
+
+    private function storeRangeAsset(Request $request, Job $job): RedirectResponse
+    {
+        $data = $request->validate([
+            'prefix'                   => ['required', 'string', 'max:100'],
+            'range_start'              => ['required', 'regex:/^\d+$/'],
+            'range_end'                => ['required', 'regex:/^\d+$/', 'gte:range_start'],
+            'quantity'                 => ['required', 'integer', 'min:1'],
+            'asset_type'               => ['required', Rule::exists('master_lookups', 'value')->where('category', 'asset_type')],
+            'building_id'              => [$job->buildings()->exists() ? 'required' : 'nullable', 'exists:buildings,id'],
+            'zone'                     => ['nullable', 'string', 'max:100'],
+            'make'                     => ['nullable', 'string', 'max:255'],
+            'model'                    => ['nullable', 'string', 'max:255'],
+            'rating'                   => ['nullable', 'string', 'max:100'],
+            'fixing_type'              => ['nullable', 'string', 'max:100'],
+            'install_date'             => ['nullable', 'date'],
+            'next_inspection_due_date' => ['nullable', 'date'],
+        ]);
+
+        $start       = (int) $data['range_start'];
+        $end         = (int) $data['range_end'];
+        $rangeLength = $end - $start + 1;
+
+        if ((int) $data['quantity'] !== $rangeLength) {
+            return back()->withInput()->withErrors([
+                'quantity' => "Quantity must equal end − start + 1 = {$rangeLength}.",
+            ]);
+        }
+
+        $padLength = strlen($request->input('range_end'));
+        $prefix    = $data['prefix'];
+        $pad       = fn (int $n) => str_pad($n, $padLength, '0', STR_PAD_LEFT);
+
+        for ($i = $start; $i <= $end; $i++) {
+            $code = $prefix . $pad($i);
+            if (Asset::where('site_id', $job->site_id)->where('asset_code', $code)->exists()) {
+                return back()->withInput()->withErrors([
+                    'prefix' => "Asset code '{$code}' already exists at this site.",
+                ]);
+            }
+        }
+
+        $groupId = (string) Str::uuid();
+
+        for ($i = $start; $i <= $end; $i++) {
+            Asset::create([
+                'site_id'                  => $job->site_id,
+                'building_id'              => $data['building_id'] ?? null,
+                'zone'                     => $data['zone'] ?? null,
+                'asset_code'               => $prefix . $pad($i),
+                'asset_type'               => $data['asset_type'],
+                'group_id'                 => $groupId,
+                'make'                     => $data['make'] ?? null,
+                'model'                    => $data['model'] ?? null,
+                'rating'                   => $data['rating'] ?? null,
+                'fixing_type'              => $data['fixing_type'] ?? null,
+                'install_date'             => $data['install_date'] ?? null,
+                'next_inspection_due_date' => $data['next_inspection_due_date'] ?? null,
+                'created_by'               => Auth::id(),
+            ]);
+        }
+
+        $first = $prefix . $pad($start);
+        $last  = $prefix . $pad($end);
+
+        return redirect()->route('technician.jobs.show', $job)
+            ->with('success', "{$rangeLength} assets ({$first}–{$last}) added to the register.");
+    }
+
+    public function updateAsset(Request $request, Job $job, Asset $asset): RedirectResponse
+    {
+        abort_if(!$job->technicians()->where('users.id', Auth::id())->exists(), 403);
+        abort_if($job->isClosed(), 403, 'This job is closed.');
+        abort_if($asset->site_id !== $job->site_id, 403);
+
+        $data = $request->validate([
+            'asset_code'               => ['required', 'string', 'max:255',
+                Rule::unique('assets', 'asset_code')->where('site_id', $job->site_id)->ignore($asset->id),
+            ],
+            'asset_type'               => ['required', Rule::exists('master_lookups', 'value')->where('category', 'asset_type')],
+            'building_id'              => [$job->buildings()->exists() ? 'required' : 'nullable', 'exists:buildings,id'],
+            'zone'                     => ['nullable', 'string', 'max:100'],
+            'group_id'                 => ['nullable', 'string', 'max:100'],
+            'make'                     => ['nullable', 'string', 'max:255'],
+            'model'                    => ['nullable', 'string', 'max:255'],
+            'serial_or_batch'          => ['nullable', 'string', 'max:100'],
+            'rating'                   => ['nullable', 'string', 'max:100'],
+            'fixing_type'              => ['nullable', 'string', 'max:100'],
+            'install_date'             => ['nullable', 'date'],
+            'next_inspection_due_date' => ['nullable', 'date'],
+        ], [
+            'asset_code.unique' => "Asset code '{$request->asset_code}' already exists at this site.",
+        ]);
+
+        $asset->update([...$data, 'updated_by' => Auth::id()]);
+
+        return redirect()->route('technician.jobs.show', $job)
+            ->with('success', "Asset {$asset->asset_code} updated.");
+    }
+
+    public function destroyAsset(Request $request, Job $job, Asset $asset): RedirectResponse
+    {
+        abort_if(!$job->technicians()->where('users.id', Auth::id())->exists(), 403);
+        abort_if($job->isClosed(), 403, 'This job is closed.');
+        abort_if($asset->site_id !== $job->site_id, 403);
+
+        $request->validate([
+            'remarks' => ['required', 'string', 'min:3', 'max:500'],
+        ], [
+            'remarks.required' => 'A reason for removal is required.',
+            'remarks.min'      => 'Please provide a more descriptive reason (at least 3 characters).',
+        ]);
+
+        $code = $asset->asset_code;
+
+        activity()->useLog('assets')
+            ->causedBy(Auth::user())
+            ->performedOn($asset)
+            ->event('deleted')
+            ->withProperties(['remarks' => $request->remarks, 'job_id' => $job->id])
+            ->log("Asset {$code} removed by technician. Reason: {$request->remarks}");
+
+        $asset->delete();
+
+        return redirect()->route('technician.jobs.show', $job)
+            ->with('success', "Asset {$code} removed from the register.");
     }
 }

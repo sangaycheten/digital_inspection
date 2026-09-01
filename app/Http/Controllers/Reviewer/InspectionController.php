@@ -98,9 +98,9 @@ class InspectionController extends Controller
                 'inspectionRecords as approved_count'  => fn ($q) => $q->where('document_status', 'approved'),
                 'inspectionRecords as draft_count'     => fn ($q) => $q->where('document_status', 'draft'),
             ])
-            ->when(!$request->filled('status'), fn ($q) => $q->whereNotIn('status', ['approved', 'issued', 'closed']))
+            ->when(!$request->filled('status'), fn ($q) => $q->whereIn('status', ['submitted_for_review', 'under_review', 'rectification_required']))
             ->when($request->status === 'submitted', fn ($q) => $q->whereHas('inspectionRecords', fn ($ir) => $ir->where('document_status', 'submitted')))
-            ->when($request->status === 'approved',  fn ($q) => $q->where('status', 'approved'))
+            ->when($request->status === 'approved',  fn ($q) => $q->whereIn('status', ['approved', 'issued', 'closed']))
             ->when($request->technician_id, fn ($q) => $q->whereHas('technicians', fn ($t) => $t->where('users.id', $request->technician_id)))
             ->latest()
             ->paginate(20)

@@ -4,6 +4,8 @@
     @push('styles')
     <style>
         .permission-matrix th { white-space: nowrap; }
+        .permission-matrix thead th { position: sticky; top: 0; z-index: 2; }
+        .permission-matrix-scroll { max-height: calc(100vh - 200px); overflow: auto; }
         .permission-matrix td.module-header {
             font-weight: 600;
             background-color: var(--vz-secondary-bg);
@@ -108,9 +110,9 @@
                     </button>
                 </div>
                 <div class="card-body p-0">
-                    <div class="table-responsive">
+                    <div class="permission-matrix-scroll">
                         <table class="table table-bordered permission-matrix mb-0">
-                            <thead class="table-dark">
+                            <thead class="table-light">
                                 <tr>
                                     <th style="min-width: 200px;">Permission</th>
                                     @foreach($roles as $role)
@@ -133,7 +135,7 @@
                                 @foreach($permissionGroups as $module => $permissions)
                                 <tr>
                                     <td class="module-header" colspan="{{ $roles->count() + 1 }}">
-                                        <i class="ri-apps-line me-1"></i> {{ $module }}
+                                        <i class="ri-apps-line me-1"></i> {{ $moduleLabels[$module] ?? $module }}
                                         @if(in_array($module, $restrictedModules))
                                             <span class="badge bg-warning-subtle text-warning ms-2 fs-11">
                                                 <i class="ri-lock-line me-1"></i>Admin & Manager only
@@ -144,7 +146,7 @@
                                 @foreach($permissions as $permission)
                                 <tr>
                                     <td class="ps-4">
-                                        <span class="text-muted">{{ ucfirst($permission->name) }}</span>
+                                        <span class="text-muted">{{ Str::title($permission->name) }}</span>
                                     </td>
                                     @foreach($roles as $role)
                                     @php $isRestricted = in_array($module, $restrictedModules) && !in_array($role->name, ['system-administrator', 'manager']); @endphp
@@ -243,7 +245,7 @@
                         </div>
                         <div class="table-responsive">
                             <table class="table table-bordered permission-matrix">
-                                <thead class="table-dark">
+                                <thead class="table-light">
                                     <tr>
                                         <th style="min-width: 200px;">Permission</th>
                                         @foreach($roles as $role)
@@ -265,7 +267,7 @@
                                     </tr>
                                     @foreach($permissions as $permission)
                                     <tr>
-                                        <td class="ps-4">{{ ucfirst($permission->name) }}</td>
+                                        <td class="ps-4">{{ Str::title($permission->name) }}</td>
                                         @foreach($roles as $role)
                                         @php $isRestricted = in_array($module, $restrictedModules) && !in_array($role->name, ['system-administrator', 'manager']); @endphp
                                         <td class="permission-check">

@@ -10,6 +10,7 @@ use App\Models\MasterLookup;
 use App\Models\Site;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 use Spatie\Activitylog\Models\Activity;
 
@@ -52,6 +53,9 @@ class InspectionController extends Controller
             ));
         }
 
+        $isManager    = Auth::user()->hasRole('manager');
+        $managerClients = $isManager ? Client::where('manager_id', Auth::id())->pluck('id') : collect();
+
         // Default: job-level grouped view
         $jobs = Job::whereHas('inspectionRecords')
             ->with(['client.manager', 'site', 'technicians'])
@@ -61,6 +65,7 @@ class InspectionController extends Controller
                 'inspectionRecords as submitted_count' => fn ($q) => $q->where('document_status', 'submitted'),
                 'inspectionRecords as approved_count'  => fn ($q) => $q->where('document_status', 'approved'),
             ])
+            ->when($isManager, fn ($q) => $q->whereIn('client_id', $managerClients))
             ->when($request->client_id,     fn ($q) => $q->where('client_id', $request->client_id))
             ->when($request->site_id,       fn ($q) => $q->where('site_id', $request->site_id))
             ->when($request->technician_id, fn ($q) => $q->whereHas('technicians', fn ($t) => $t->where('users.id', $request->technician_id)))
@@ -68,6 +73,7 @@ class InspectionController extends Controller
             ->when($request->status === 'submitted', fn ($q) => $q->whereHas('inspectionRecords', fn ($ir) => $ir->where('document_status', 'submitted')))
             ->when($request->status === 'approved',  fn ($q) => $q->whereHas('inspectionRecords', fn ($ir) => $ir->where('document_status', 'approved')))
             ->when($request->status === 'draft',     fn ($q) => $q->whereHas('inspectionRecords', fn ($ir) => $ir->where('document_status', 'draft')))
+            ->when(!$request->filled('status') && $isManager, fn ($q) => $q->whereIn('status', ['submitted_for_review', 'under_review', 'rectification_required', 'approved', 'issued', 'closed']))
             ->latest()
             ->paginate(20)
             ->withQueryString();

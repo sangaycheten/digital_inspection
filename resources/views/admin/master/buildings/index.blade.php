@@ -364,8 +364,10 @@
     <script src="{{ asset('assets/libs/leaflet/leaflet.js') }}"></script>
     <script src="{{ asset('assets/libs/leaflet/leaflet.draw.js') }}"></script>
     <script>
-    const OSM_TILES   = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-    const OSM_ATTR    = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+    const OSM_TILES        = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+    const OSM_ATTR         = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+    const SAT_TILES        = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+    const SAT_ATTR         = 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community';
     const DEFAULT_LAT = 27.4716, DEFAULT_LNG = 89.6386, DEFAULT_ZOOM = 19;
 
     // Site coordinates lookup
@@ -402,11 +404,14 @@
         if (ed.map) { ed.map.invalidateSize(); return; }
 
         const hasCoords = lat && lng;
-        const map = L.map(mapElId).setView(
+        const map = L.map(mapElId, { layers: [] }).setView(
             [hasCoords ? lat : DEFAULT_LAT, hasCoords ? lng : DEFAULT_LNG],
             hasCoords ? DEFAULT_ZOOM : 13
         );
-        L.tileLayer(OSM_TILES, { attribution: OSM_ATTR, maxZoom: 22 }).addTo(map);
+        const streetLayer    = L.tileLayer(OSM_TILES, { attribution: OSM_ATTR, maxZoom: 22 });
+        const satelliteLayer = L.tileLayer(SAT_TILES, { attribution: SAT_ATTR, maxZoom: 22 });
+        streetLayer.addTo(map);
+        L.control.layers({ 'Street': streetLayer, 'Satellite': satelliteLayer }, {}, { position: 'topright' }).addTo(map);
 
         const drawnItems = new L.FeatureGroup();
         map.addLayer(drawnItems);

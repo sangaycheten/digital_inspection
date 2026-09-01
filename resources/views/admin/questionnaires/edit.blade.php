@@ -53,7 +53,7 @@
                         <div class="row g-3 mb-3" style="max-width:700px;">
                             <div class="col-md-6">
                                 <label class="form-label fw-medium">Asset Type</label>
-                                <select name="asset_type" class="form-select">
+                                <select name="asset_type" id="sgAssetType" class="form-select" onchange="sgRegenerateAllAutoKeys()">
                                     <option value="">— Not asset-specific —</option>
                                     @foreach($assetTypes as $val => $label)
                                     <option value="{{ $val }}"
@@ -119,7 +119,7 @@
                         {{-- Asset Type --}}
                         <div class="mb-3">
                             <label class="form-label">Asset Type</label>
-                            <select name="asset_type" class="form-select">
+                            <select name="asset_type" id="editAssetType" class="form-select" onchange="editRegenerateKey()">
                                 <option value="">— Not asset-specific —</option>
                                 @foreach($assetTypes as $val => $label)
                                 <option value="{{ $val }}"
@@ -190,9 +190,9 @@
                         {{-- Key --}}
                         <div class="mb-3">
                             <label class="form-label">Key <span class="text-danger">*</span></label>
-                            <input type="text" name="key" class="form-control font-monospace" required maxlength="100"
-                                   value="{{ old('key', $questionnaire->key) }}">
-                            <div class="form-text">Unique identifier. Letters, numbers, hyphens, underscores. Saved in lowercase.</div>
+                            <input type="text" name="key" id="editKey" class="form-control font-monospace bg-light" required maxlength="100"
+                                   value="{{ old('key', $questionnaire->key) }}" readonly>
+                            <div class="form-text">Auto-generated from asset type and data type.</div>
                         </div>
 
                         {{-- Parent (sub_questionnaire type only) --}}
@@ -321,6 +321,39 @@
 
     @if($subQuestionnaires->isNotEmpty())
     // ── Sub-group edit ────────────────────────────────────────────────────────
+    const TYPE_ABBR = { switch:'sw', text:'txt', number:'num', option_list:'opt', date:'dt', textarea:'ta', photo:'photo' };
+    function sgSlugify(str) { return (str||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,''); }
+    function sgCollectUsedKeys(skipEl) {
+        const keys = new Set();
+        document.querySelectorAll('#sgContainer .sg-key').forEach(el => { if (el !== skipEl && el.value) keys.add(el.value); });
+        return keys;
+    }
+    function sgBuildKeyBase(dataType) {
+        const assetVal = document.getElementById('sgAssetType').value;
+        return (assetVal ? sgSlugify(assetVal) : 'gen') + '_' + (TYPE_ABBR[dataType] || sgSlugify(dataType) || 'q');
+    }
+    function sgMakeUniqueKey(base, usedKeys) { let n=1,key; do{key=base+'_'+n++;}while(usedKeys.has(key)); return key; }
+    function sgAutoFillKey(inputEl, dataType) {
+        if (!inputEl || !dataType || inputEl.dataset.auto === 'false') return;
+        inputEl.value = sgMakeUniqueKey(sgBuildKeyBase(dataType), sgCollectUsedKeys(inputEl));
+    }
+    function sgAttachKeyListener(inputEl) {
+        if (!inputEl) return;
+        inputEl.dataset.auto = inputEl.value ? 'false' : 'true';
+        inputEl.readOnly = true;
+        inputEl.classList.add('bg-light');
+    }
+    function sgRegenerateAllAutoKeys() {
+        const usedKeys = new Set();
+        document.querySelectorAll('#sgContainer .sg-key').forEach(el => {
+            if (el.dataset.auto === 'false') { if (el.value) usedKeys.add(el.value); return; }
+            const dataType = el.closest('.sg-row')?.querySelector('.sg-type-select')?.value || '';
+            if (!dataType) return;
+            const key = sgMakeUniqueKey(sgBuildKeyBase(dataType), usedKeys);
+            el.value = key; usedKeys.add(key);
+        });
+    }
+
     const PARENT_IS_SWITCH  = @json($questionnaire->type === 'switch');
     const PARENT_SW_OPTIONS = @json($questionnaire->fieldType->options ?? []);
     function sgAddRow(prefill) {
@@ -338,8 +371,8 @@
                 </div>
                 <div class="col-md-5">
                     <label class="form-label form-label-sm">Key <span class="text-danger">*</span></label>
-                    <input type="text" name="key[]" class="form-control form-control-sm font-monospace sg-key"
-                           maxlength="100" value="${sgEsc(prefill.key || '')}" placeholder="sub_key">
+                    <input type="text" name="key[]" class="form-control form-control-sm font-monospace sg-key bg-light"
+                           maxlength="100" value="${sgEsc(prefill.key || '')}" placeholder="Auto-generated" readonly>
                 </div>
             </div>
             <div class="row g-2 mb-2">
@@ -391,6 +424,7 @@
                 </button>
             </div>`;
         container.appendChild(div);
+        sgAttachKeyListener(div.querySelector('.sg-key'));
         sgUpdateRemoveBtns();
 
         const sgCondWrap = div.querySelector('.sg-condition-wrap');
@@ -440,6 +474,7 @@
         prev.style.display = 'none';
         ftSel.innerHTML = '<option value="">— Select option set —</option>';
         ftSel.disabled = true; ftWrap.style.display = 'none';
+        if (type) sgAutoFillKey(row.querySelector('.sg-key'), type);
         if (!TYPES_WITH_OPTS.includes(type)) return;
         ftWrap.style.display = '';
         label.innerHTML = (type === 'switch' ? 'Switch Option Set' : 'Option List Set')
@@ -514,6 +549,19 @@
 
     @else
     // ── Single edit ───────────────────────────────────────────────────────────
+    const EDIT_TYPE_ABBR = { switch:'sw', text:'txt', number:'num', option_list:'opt', date:'dt', textarea:'ta', photo:'photo' };
+    function editSlugify(str) { return (str||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,''); }
+    function editBuildKey(dataType) {
+        const assetVal = document.getElementById('editAssetType').value;
+        const base = (assetVal ? editSlugify(assetVal) : 'gen') + '_' + (EDIT_TYPE_ABBR[dataType] || editSlugify(dataType) || 'q');
+        return base + '_1';
+    }
+    function editRegenerateKey() {
+        const keyEl   = document.getElementById('editKey');
+        const dataType = document.getElementById('editType').value;
+        if (dataType && dataType !== SUB_Q_TYPE) keyEl.value = editBuildKey(dataType);
+    }
+
     function onEditParentChange(parentId) {
         const parentSel = document.getElementById('editParentId');
         const condWrap  = document.getElementById('editConditionWrap');
@@ -548,6 +596,7 @@
             }
             return;
         }
+        if (type) editRegenerateKey();
         if (!TYPES_WITH_OPTS.includes(type)) return;
 
         ftWrap.style.display = '';

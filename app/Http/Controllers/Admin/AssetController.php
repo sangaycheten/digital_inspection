@@ -64,7 +64,6 @@ class AssetController extends Controller
             'zone'                     => ['nullable', 'string', 'max:255'],
             'asset_code'               => ['required', 'string', 'max:255'],
             'asset_type'               => ['required', Rule::exists('master_lookups', 'value')->where('category', 'asset_type')],
-            'group_id'                 => ['nullable', 'string', 'max:255'],
             'make'                     => ['nullable', 'string', 'max:255'],
             'model'                    => ['nullable', 'string', 'max:255'],
             'serial_or_batch'          => ['nullable', 'string', 'max:255'],
@@ -77,6 +76,12 @@ class AssetController extends Controller
             'asset_code.required' => 'Asset code is required.',
             'asset_type.in'       => 'Invalid asset type selected.',
         ]);
+
+        $site = Site::with('client')->find($data['site_id']);
+        $clientCode = $site?->client?->custom_client_code ?? null;
+        if ($clientCode) {
+            $data['asset_code'] = $clientCode . '-' . $data['asset_code'];
+        }
 
         $exists = Asset::where('site_id', $data['site_id'])
             ->where('asset_code', $data['asset_code'])
@@ -133,8 +138,10 @@ class AssetController extends Controller
         }
 
         // Pad width is taken from the raw input (e.g. "06" → pad 2, "6" → pad 1)
-        $padLength = strlen($request->input('range_end'));
-        $prefix    = $data['prefix'];
+        $padLength  = strlen($request->input('range_end'));
+        $site       = Site::with('client')->find($data['site_id']);
+        $clientCode = $site?->client?->custom_client_code ?? null;
+        $prefix     = $clientCode ? $clientCode . '-' . $data['prefix'] : $data['prefix'];
         $pad       = fn (int $n) => str_pad($n, $padLength, '0', STR_PAD_LEFT);
 
         // Verify every code is unique before inserting any

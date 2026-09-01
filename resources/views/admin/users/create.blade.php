@@ -1,6 +1,10 @@
 <x-app-layout>
     <x-slot name="title">Add User</x-slot>
 
+    @push('styles')
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+    @endpush
+
     <div class="row">
         <div class="col-12">
             <div class="page-title-box d-sm-flex align-items-center justify-content-between">
@@ -101,20 +105,47 @@
 
                         <div class="mb-3">
                             <label for="password" class="form-label">Password <span class="text-danger">*</span></label>
-                            <input type="password" class="form-control @error('password') is-invalid @enderror"
-                                   id="password" name="password"
-                                   required placeholder="Enter password">
-                            @error('password')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
+                            <div class="input-group">
+                                <input type="password" class="form-control @error('password') is-invalid @enderror"
+                                       id="password" name="password"
+                                       required placeholder="Enter password">
+                                <button class="btn btn-outline-secondary" type="button"
+                                        onclick="togglePwd('password', this)" tabindex="-1">
+                                    <i class="ri-eye-line"></i>
+                                </button>
+                                @error('password')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
                             <div class="form-text">Min 8 characters with uppercase, lowercase, number, and symbol.</div>
                         </div>
 
                         <div class="mb-4">
                             <label for="password_confirmation" class="form-label">Confirm Password</label>
-                            <input type="password" class="form-control"
-                                   id="password_confirmation" name="password_confirmation"
-                                   required placeholder="Confirm password">
+                            <div class="input-group">
+                                <input type="password" class="form-control"
+                                       id="password_confirmation" name="password_confirmation"
+                                       required placeholder="Confirm password">
+                                <button class="btn btn-outline-secondary" type="button"
+                                        onclick="togglePwd('password_confirmation', this)" tabindex="-1">
+                                    <i class="ri-eye-line"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="timezone" class="form-label">Timezone <span class="text-danger">*</span></label>
+                            <select class="form-select @error('timezone') is-invalid @enderror"
+                                    id="timezone" name="timezone" required>
+                                <option value="">— Select Timezone —</option>
+                                @foreach(\DateTimeZone::listIdentifiers() as $tz)
+                                    <option value="{{ $tz }}" {{ old('timezone', 'UTC') === $tz ? 'selected' : '' }}>{{ $tz }}</option>
+                                @endforeach
+                            </select>
+                            @error('timezone')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                            <div class="form-text">Used to display system event times in the user's local time.</div>
                         </div>
 
                         <div class="hstack gap-2 justify-content-end">
@@ -129,6 +160,7 @@
         </div>
     </div>
 @push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
 <script>
 const allSitesList  = @json($sites);
 const sitesByClient = @json($sites->groupBy('client_id'));
@@ -225,7 +257,16 @@ function applyIndeterminate() {
     document.querySelectorAll('[data-indet="1"]').forEach(el => el.indeterminate = true);
 }
 
+function togglePwd(id, btn) {
+    const inp = document.getElementById(id);
+    const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    btn.querySelector('i').className = show ? 'ri-eye-off-line' : 'ri-eye-line';
+}
+
 document.addEventListener('DOMContentLoaded', function () {
+    new TomSelect('#timezone', { create: false, maxOptions: null });
+
     const role     = document.getElementById('role').value;
     const clientId = document.getElementById('client_id').value;
     document.getElementById('role').addEventListener('change', e => onRoleChange(e.target.value));

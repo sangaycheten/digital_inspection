@@ -1,6 +1,10 @@
 <x-app-layout>
     <x-slot name="title">Job Details</x-slot>
 
+    @push('styles')
+    <link rel="stylesheet" href="{{ asset('assets/libs/leaflet/leaflet.css') }}">
+    @endpush
+
     @php
     $statusColors = [
         'new'                    => 'secondary',
@@ -25,7 +29,7 @@
     $isInspectionJob   = in_array($job->work_type, ['first_inspection', 're_inspection']);
     $isInstallationJob = in_array($job->work_type, ['installation', 'rectification', 'combined']);
     $scheduledDateOk   = !$job->scheduled_date || today()->gte($job->scheduled_date);
-    $canCapture        = !$job->isClosed() && in_array($job->status, ['scheduled', 'in_progress', 'rectification_required']) && $scheduledDateOk;
+    $canCapture        = !$job->isClosed() && in_array($job->status, ['new', 'scheduled', 'in_progress', 'rectification_required']) && $scheduledDateOk;
     @endphp
 
     <div class="row">
@@ -116,7 +120,12 @@
                                 </tr>
                                 <tr>
                                     <td class="text-muted ps-0 fs-13">Scheduled</td>
-                                    <td class="fs-13">{{ $job->scheduled_date?->format('d M Y') ?? '—' }}</td>
+                                    <td class="fs-13">
+                                        {{ $job->scheduled_date?->format('d M Y') ?? '—' }}
+                                        @if($job->scheduled_time)
+                                            <span class="text-muted ms-1">{{ \Carbon\Carbon::parse($job->scheduled_time)->format('H:i') }}</span>
+                                        @endif
+                                    </td>
                                 </tr>
                                 @if($job->scope_notes)
                                 <tr>
@@ -130,6 +139,56 @@
                 </div>
             </div>
 
+            {{-- Building zones map --}}
+            @php
+                $assignedBuildings = $job->buildings->whereIn('id', $buildingIds->toArray());
+                $zoneMapData = $assignedBuildings->flatMap(function($building) {
+                    return collect($building->roof_zones ?? [])
+                        ->filter(fn($z) => is_array($z) && !empty($z['polygon']))
+                        ->map(fn($z) => [
+                            'name'     => $z['name'] ?? 'Zone',
+                            'color'    => $z['color'] ?? '#3b82f6',
+                            'polygon'  => $z['polygon'],
+                            'building' => $building->name_or_level,
+                        ]);
+                })->values();
+                $siteLat = $job->site->latitude;
+                $siteLng = $job->site->longitude;
+            @endphp
+
+            @if($siteLat && $siteLng)
+            <div class="card mb-3">
+                <div class="card-header d-flex align-items-center">
+                    <h6 class="card-title mb-0 flex-grow-1">
+                        <i class="ri-map-2-line me-2 text-primary"></i>Building Location
+                        @if($zoneMapData->isNotEmpty())
+                        <small class="text-muted fw-normal ms-1">· {{ $zoneMapData->count() }} roof zone(s) marked</small>
+                        @endif
+                    </h6>
+                    <div class="d-flex align-items-center gap-2">
+                        @if($zoneMapData->isNotEmpty())
+                        <div class="d-flex flex-wrap gap-1">
+                            @foreach($zoneMapData as $z)
+                            <span class="badge fs-11" style="background:{{ $z['color'] }}; color:#fff">
+                                <i class="ri-map-2-line me-1"></i>{{ $z['building'] }}: {{ $z['name'] }}
+                            </span>
+                            @endforeach
+                        </div>
+                        @endif
+                        <a href="https://www.google.com/maps?q={{ $siteLat }},{{ $siteLng }}"
+                           target="_blank" rel="noopener"
+                           class="btn btn-sm btn-outline-success flex-shrink-0">
+                            <i class="ri-map-pin-2-line me-1"></i>Google Maps
+                        </a>
+                        <button type="button" id="toggleMapBtn" class="btn btn-sm btn-outline-primary flex-shrink-0">
+                            <i class="ri-map-2-line me-1"></i>View Map
+                        </button>
+                    </div>
+                </div>
+                <div id="techBuildingMap" style="height:300px; border-radius:0 0 8px 8px; display:none;"></div>
+            </div>
+            @endif
+
             {{-- Capture actions --}}
             @if(!$job->isClosed() && in_array($job->status, ['scheduled', 'in_progress', 'rectification_required']) && !$scheduledDateOk)
             <div class="card mb-3 border-warning">
@@ -141,7 +200,7 @@
                         <div class="fw-semibold fs-14">Inspection Not Yet Open</div>
                         <div class="text-muted fs-13">
                             This job is scheduled to start on
-                            <strong>{{ $job->scheduled_date->format('d M Y') }}</strong>.
+                            <strong>{{ $job->scheduled_date->format('d M Y') }}@if($job->scheduled_time) at {{ \Carbon\Carbon::parse($job->scheduled_time)->format('H:i') }}@endif</strong>.
                             You can begin capturing from that date onwards.
                         </div>
                     </div>
@@ -289,7 +348,7 @@
                             @if($scheduledDateOk)
                                 Found an asset on site not yet in the register? Add it here.
                             @else
-                                Available from <strong>{{ $job->scheduled_date->format('d M Y') }}</strong>.
+                                Available from <strong>{{ $job->scheduled_date->format('d M Y') }}@if($job->scheduled_time) at {{ \Carbon\Carbon::parse($job->scheduled_time)->format('H:i') }}@endif</strong>.
                             @endif
                         </div>
                     </div>
@@ -325,6 +384,7 @@
                                 <th>Building</th>
                                 <th>Zone</th>
                                 <th>Status</th>
+                                @if(!$job->isClosed())<th></th>@endif
                             </tr>
                         </thead>
                         <tbody>
@@ -333,7 +393,7 @@
                             @if($asset->asset_type !== $currentType)
                             @php $currentType = $asset->asset_type; @endphp
                             <tr class="table-light">
-                                <td colspan="5" class="ps-3 py-1">
+                                <td colspan="{{ $job->isClosed() ? 5 : 6 }}" class="ps-3 py-1">
                                     <span class="fw-semibold fs-11 text-uppercase text-primary">
                                         {{ $assetTypes[$currentType] ?? $currentType }}
                                     </span>
@@ -359,6 +419,36 @@
                                         {{ str_replace('_', ' ', $asset->current_status ?? 'not inspected') }}
                                     </span>
                                 </td>
+                                @if(!$job->isClosed())
+                                <td class="pe-2">
+                                    <div class="hstack gap-1 justify-content-end">
+                                        <button type="button" class="btn btn-sm btn-outline-primary btn-edit-asset"
+                                            data-id="{{ $asset->id }}"
+                                            data-asset_code="{{ $asset->asset_code }}"
+                                            data-asset_type="{{ $asset->asset_type }}"
+                                            data-building_id="{{ $asset->building_id }}"
+                                            data-zone="{{ $asset->zone }}"
+                                            data-group_id="{{ $asset->group_id }}"
+                                            data-make="{{ $asset->make }}"
+                                            data-model="{{ $asset->model }}"
+                                            data-serial_or_batch="{{ $asset->serial_or_batch }}"
+                                            data-rating="{{ $asset->rating }}"
+                                            data-fixing_type="{{ $asset->fixing_type }}"
+                                            data-install_date="{{ $asset->install_date?->format('Y-m-d') }}"
+                                            data-next_inspection_due_date="{{ $asset->next_inspection_due_date?->format('Y-m-d') }}"
+                                            title="Edit">
+                                            <i class="ri-edit-line"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-danger btn-delete-asset"
+                                            data-id="{{ $asset->id }}"
+                                            data-code="{{ $asset->asset_code }}"
+                                            data-action="{{ route('technician.jobs.assets.destroy', [$job, $asset]) }}"
+                                            title="Remove">
+                                            <i class="ri-delete-bin-line"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                                @endif
                             </tr>
                             @endforeach
                         </tbody>
@@ -566,27 +656,126 @@
         <div class="modal-content">
             <form method="POST" action="{{ route('technician.jobs.assets.store', $job) }}">
                 @csrf
+                <input type="hidden" name="mode" id="addModeInput" value="{{ old('mode', 'single') }}">
                 <div class="modal-header">
                     <h5 class="modal-title" id="addAssetModalLabel">
                         <i class="ri-add-box-line me-2 text-primary"></i>Register New Asset
                     </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <div class="btn-group btn-group-sm ms-3" role="group">
+                        <input type="radio" class="btn-check" name="add_mode_ui" id="addModeSingle" autocomplete="off"
+                               {{ old('mode', 'single') === 'single' ? 'checked' : '' }}
+                               onchange="setAddMode('single')">
+                        <label class="btn btn-outline-primary" for="addModeSingle">
+                            <i class="ri-file-line me-1"></i>Single
+                        </label>
+                        <input type="radio" class="btn-check" name="add_mode_ui" id="addModeRange" autocomplete="off"
+                               {{ old('mode') === 'range' ? 'checked' : '' }}
+                               onchange="setAddMode('range')">
+                        <label class="btn btn-outline-primary" for="addModeRange">
+                            <i class="ri-list-check me-1"></i>Range
+                        </label>
+                    </div>
+                    <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body" style="max-height:75vh;overflow-y:auto;">
                     <div class="alert alert-light border fs-12 mb-3 py-2">
                         <i class="ri-map-pin-line me-1"></i>
                         <strong>Site:</strong> {{ $job->site->name ?? $job->site->address }}
                         @if($job->client) &nbsp;·&nbsp; <strong>Client:</strong> {{ $job->client->name }} @endif
                     </div>
 
+                    @if($job->buildings->isNotEmpty())
                     <div class="mb-3">
-                        <label class="form-label fw-medium fs-13">Asset Code <span class="text-danger">*</span></label>
-                        <input type="text" name="asset_code"
-                               class="form-control @error('asset_code') is-invalid @enderror"
-                               value="{{ old('asset_code') }}"
-                               placeholder="e.g. AP01, FE-B2-01"
-                               required autofocus>
-                        @error('asset_code')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        <label class="form-label fw-medium fs-13">Building <span class="text-danger">*</span></label>
+                        <select name="building_id" class="form-select @error('building_id') is-invalid @enderror" required>
+                            <option value="" disabled {{ old('building_id') ? '' : 'selected' }}>— Select Building —</option>
+                            @foreach($job->buildings as $b)
+                            <option value="{{ $b->id }}" {{ old('building_id') == $b->id ? 'selected' : (($job->buildings->count() === 1) ? 'selected' : '') }}>
+                                {{ $b->name_or_level }}
+                            </option>
+                            @endforeach
+                        </select>
+                        @error('building_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                    @endif
+
+                    @php $clientCode = $job->client->custom_client_code ?? ''; @endphp
+
+                    {{-- Single mode: asset code + group ID --}}
+                    <div class="single-add">
+                        <div class="mb-3">
+                            <label class="form-label fw-medium fs-13">Asset Code <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                @if($clientCode)
+                                <span class="input-group-text bg-primary-subtle text-primary fw-semibold fs-12"
+                                      style="min-width:52px; justify-content:center">{{ $clientCode }}-</span>
+                                @endif
+                                <input type="text" id="assetCodeSuffix"
+                                       class="form-control @error('asset_code') is-invalid @enderror"
+                                       placeholder="e.g. AP01"
+                                       value="{{ old('asset_code') ? (str_starts_with(old('asset_code'), $clientCode.'-') ? substr(old('asset_code'), strlen($clientCode)+1) : old('asset_code')) : '' }}"
+                                       autofocus>
+                                <input type="hidden" name="asset_code" id="assetCodeHidden" value="{{ old('asset_code') }}">
+                            </div>
+                            @if($clientCode)
+                            <div class="form-text text-muted fs-11">Client code <strong>{{ $clientCode }}</strong> is prefixed automatically.</div>
+                            @endif
+                            @error('asset_code')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-medium fs-13">Group ID</label>
+                            <input type="text" name="group_id"
+                                   class="form-control @error('group_id') is-invalid @enderror"
+                                   value="{{ old('group_id') }}" placeholder="Optional — links assets from same batch">
+                            @error('group_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+                    </div>
+
+                    {{-- Range mode: prefix + start + end + qty --}}
+                    <div class="range-add" style="display:none;">
+                        <div class="mb-3">
+                            <label class="form-label fw-medium fs-13">Prefix <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                @if($clientCode)
+                                <span class="input-group-text bg-primary-subtle text-primary fw-semibold fs-12"
+                                      style="min-width:52px; justify-content:center">{{ $clientCode }}-</span>
+                                @endif
+                                <input type="text" id="addRangePrefixSuffix"
+                                       class="form-control @error('prefix') is-invalid @enderror"
+                                       placeholder="e.g. AP"
+                                       value="{{ old('prefix') ? (str_starts_with(old('prefix'), $clientCode.'-') ? substr(old('prefix'), strlen($clientCode)+1) : old('prefix')) : '' }}"
+                                       oninput="updateAddIndicator()">
+                            </div>
+                            <input type="hidden" name="prefix" id="addRangePrefixHidden" value="{{ old('prefix') }}">
+                            @error('prefix')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-4">
+                                <label class="form-label fw-medium fs-13">Start <span class="text-danger">*</span></label>
+                                <input type="text" id="addRangeStart" name="range_start" inputmode="numeric"
+                                       class="form-control @error('range_start') is-invalid @enderror"
+                                       placeholder="01" value="{{ old('range_start') }}"
+                                       oninput="recalcAddRange()">
+                                @error('range_start')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label fw-medium fs-13">End <span class="text-danger">*</span></label>
+                                <input type="text" id="addRangeEnd" name="range_end" inputmode="numeric"
+                                       class="form-control @error('range_end') is-invalid @enderror"
+                                       placeholder="06" value="{{ old('range_end') }}"
+                                       oninput="recalcAddRange()">
+                                @error('range_end')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label fw-medium fs-13">Quantity</label>
+                                <input type="number" id="addRangeQty" name="quantity" min="1"
+                                       class="form-control @error('quantity') is-invalid @enderror"
+                                       placeholder="6" value="{{ old('quantity') }}"
+                                       oninput="validateAddRange()">
+                                @error('quantity')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+                        </div>
+                        <div id="addRangeIndicator" class="fs-12 mb-2"></div>
                     </div>
 
                     <div class="mb-3">
@@ -602,21 +791,6 @@
                         @error('asset_type')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
 
-                    @if($job->buildings->isNotEmpty())
-                    <div class="mb-3">
-                        <label class="form-label fw-medium fs-13">Building</label>
-                        <select name="building_id" class="form-select @error('building_id') is-invalid @enderror" required>
-                            <option value="" disabled {{ old('building_id') ? '' : 'selected' }}>— Select Building —</option>
-                            @foreach($job->buildings as $b)
-                            <option value="{{ $b->id }}" {{ old('building_id') == $b->id ? 'selected' : (($job->buildings->count() === 1) ? 'selected' : '') }}>
-                                {{ $b->name_or_level }}
-                            </option>
-                            @endforeach
-                        </select>
-                        @error('building_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    </div>
-                    @endif
-
                     <div class="mb-3">
                         <label class="form-label fw-medium fs-13">Zone / Location</label>
                         <input type="text" name="zone"
@@ -624,14 +798,6 @@
                                value="{{ old('zone') }}"
                                placeholder="e.g. Level 2, Stairwell A">
                         @error('zone')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-medium fs-13">Group ID</label>
-                        <input type="text" name="group_id"
-                               class="form-control @error('group_id') is-invalid @enderror"
-                               value="{{ old('group_id') }}" placeholder="Optional — links assets from same batch">
-                        @error('group_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
 
                     <hr class="my-2">
@@ -652,7 +818,7 @@
                         </div>
                     </div>
                     <div class="row g-2 mb-2">
-                        <div class="col-6">
+                        <div class="col-6 single-add">
                             <label class="form-label fw-medium fs-13">Serial / Batch No.</label>
                             <input type="text" name="serial_or_batch"
                                    class="form-control form-control-sm @error('serial_or_batch') is-invalid @enderror"
@@ -696,8 +862,8 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="ri-add-line me-1"></i>Add Asset
+                    <button type="submit" id="addAssetSubmitBtn" class="btn btn-primary">
+                        <i class="ri-add-line me-1"></i><span id="addAssetSubmitLabel">Add Asset</span>
                     </button>
                 </div>
             </form>
@@ -705,14 +871,406 @@
     </div>
 </div>
 
+{{-- Edit Asset Modal --}}
+@if(!$job->isClosed())
+<div class="modal fade" id="editAssetModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" id="editAssetForm">
+                @csrf @method('PUT')
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="ri-edit-box-line me-2 text-primary"></i>Edit Asset</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-light border fs-12 mb-3 py-2">
+                        <i class="ri-map-pin-line me-1"></i>
+                        <strong>Site:</strong> {{ $job->site->name ?? $job->site->address }}
+                        @if($job->client) &nbsp;·&nbsp; <strong>Client:</strong> {{ $job->client->name }} @endif
+                    </div>
+
+                    @if($job->buildings->isNotEmpty())
+                    <div class="mb-3">
+                        <label class="form-label fw-medium fs-13">Building <span class="text-danger">*</span></label>
+                        <select name="building_id" id="editAssetBuilding" class="form-select" required>
+                            <option value="" disabled>— Select Building —</option>
+                            @foreach($job->buildings as $b)
+                            <option value="{{ $b->id }}">{{ $b->name_or_level }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    @endif
+
+                    @php $clientCode = $job->client->custom_client_code ?? ''; @endphp
+                    <div class="mb-3">
+                        <label class="form-label fw-medium fs-13">Asset Code <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            @if($clientCode)
+                            <span class="input-group-text bg-primary-subtle text-primary fw-semibold fs-12"
+                                  style="min-width:52px; justify-content:center">{{ $clientCode }}</span>
+                            @endif
+                            <input type="text" id="editAssetCodeSuffix" class="form-control" placeholder="e.g. AP01" required>
+                            <input type="hidden" name="asset_code" id="editAssetCodeHidden">
+                        </div>
+                        @if($clientCode)
+                        <div class="form-text text-muted fs-11">Client code <strong>{{ $clientCode }}</strong> is prefixed automatically.</div>
+                        @endif
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-medium fs-13">Asset Type <span class="text-danger">*</span></label>
+                        <select name="asset_type" id="editAssetType" class="form-select" required>
+                            <option value="">— Select type —</option>
+                            @foreach($assetTypes as $value => $label)
+                            <option value="{{ $value }}">{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-medium fs-13">Zone / Location</label>
+                        <input type="text" name="zone" id="editAssetZone" class="form-control"
+                               placeholder="e.g. Level 2, Stairwell A">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-medium fs-13">Group ID</label>
+                        <input type="text" name="group_id" id="editAssetGroupId" class="form-control"
+                               placeholder="Optional — links assets from same batch">
+                    </div>
+
+                    <hr class="my-2">
+                    <p class="fw-medium fs-13 mb-2 text-muted">Equipment Details</p>
+
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label fw-medium fs-13">Make</label>
+                            <input type="text" name="make" id="editAssetMake" class="form-control form-control-sm" placeholder="Manufacturer">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-medium fs-13">Model</label>
+                            <input type="text" name="model" id="editAssetModel" class="form-control form-control-sm" placeholder="Model no.">
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label fw-medium fs-13">Serial / Batch No.</label>
+                            <input type="text" name="serial_or_batch" id="editAssetSerial" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-medium fs-13">Rating</label>
+                            <input type="text" name="rating" id="editAssetRating" class="form-control form-control-sm" placeholder="e.g. 12kN">
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-12">
+                            <label class="form-label fw-medium fs-13">Fixing Type</label>
+                            <input type="text" name="fixing_type" id="editAssetFixingType" class="form-control form-control-sm" placeholder="e.g. Through-bolt">
+                        </div>
+                    </div>
+
+                    <hr class="my-2">
+                    <p class="fw-medium fs-13 mb-2 text-muted">Dates</p>
+
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label fw-medium fs-13">Install Date</label>
+                            <input type="date" name="install_date" id="editAssetInstallDate" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-medium fs-13">Next Inspection Due</label>
+                            <input type="date" name="next_inspection_due_date" id="editAssetNextDue" class="form-control form-control-sm">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="ri-save-line me-1"></i>Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{{-- Hidden delete form --}}
+<form method="POST" id="deleteAssetForm" style="display:none">
+    @csrf @method('DELETE')
+</form>
+@endif
+
 @push('scripts')
+<script src="{{ asset('assets/libs/leaflet/leaflet.js') }}"></script>
+<script>
+@if(isset($siteLat) && $siteLat && $siteLng)
+(function () {
+    const toggleBtn = document.getElementById('toggleMapBtn');
+    const mapEl     = document.getElementById('techBuildingMap');
+    if (!toggleBtn || !mapEl) return;
+
+    let leafletMap = null;
+
+    toggleBtn.addEventListener('click', function () {
+        const visible = mapEl.style.display !== 'none';
+
+        if (visible) {
+            mapEl.style.display = 'none';
+            toggleBtn.innerHTML = '<i class="ri-map-2-line me-1"></i>View Map';
+            return;
+        }
+
+        mapEl.style.display = 'block';
+        toggleBtn.innerHTML = '<i class="ri-map-2-line me-1"></i>Hide Map';
+
+        if (leafletMap) {
+            leafletMap.invalidateSize();
+            return;
+        }
+
+        // First open — initialise Leaflet
+        leafletMap = L.map('techBuildingMap').setView([{{ $siteLat }}, {{ $siteLng }}], 19);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+            maxZoom: 22
+        }).addTo(leafletMap);
+
+        const zones = @json($zoneMapData);
+        zones.forEach(function (zone) {
+            L.polygon(zone.polygon, {
+                color: zone.color, fillColor: zone.color, fillOpacity: 0.3, weight: 2,
+            })
+            .bindTooltip('<strong>' + zone.building + '</strong><br>' + zone.name, { sticky: true })
+            .addTo(leafletMap);
+        });
+
+        if (zones.length) {
+            leafletMap.fitBounds(zones.flatMap(z => z.polygon), { padding: [20, 20] });
+        }
+    });
+})();
+@endif
+</script>
 <script>
     // Re-open modal if validation failed (errors present)
-    @if($errors->hasAny(['asset_code', 'asset_type', 'building_id', 'zone', 'group_id', 'serial_or_batch', 'rating', 'fixing_type', 'install_date', 'next_inspection_due_date']))
+    @if($errors->hasAny(['asset_code', 'asset_type', 'building_id', 'zone', 'group_id', 'serial_or_batch', 'rating', 'fixing_type', 'install_date', 'next_inspection_due_date', 'prefix', 'range_start', 'range_end', 'quantity']))
     document.addEventListener('DOMContentLoaded', function () {
         new bootstrap.Modal(document.getElementById('addAssetModal')).show();
     });
     @endif
+
+    // ── Single / Range toggle for Add Asset modal ─────────────────────
+    const addClientCode = '{{ $clientCode ?? '' }}';
+
+    function setAddMode(mode) {
+        document.getElementById('addModeInput').value = mode;
+        document.querySelectorAll('.single-add').forEach(el => el.style.display = mode === 'single' ? '' : 'none');
+        document.querySelectorAll('.range-add').forEach(el => el.style.display = mode === 'range' ? '' : 'none');
+        if (mode === 'range') {
+            validateAddRange();
+        } else {
+            document.getElementById('addAssetSubmitBtn').disabled = false;
+            document.getElementById('addAssetSubmitLabel').textContent = 'Add Asset';
+        }
+    }
+
+    function recalcAddRange() {
+        const startRaw = document.getElementById('addRangeStart').value.trim();
+        const endRaw   = document.getElementById('addRangeEnd').value.trim();
+        const start    = parseInt(startRaw, 10);
+        const end      = parseInt(endRaw, 10);
+        const qty      = document.getElementById('addRangeQty');
+        if (!isNaN(start) && !isNaN(end) && end >= start) {
+            qty.value = end - start + 1;
+            document.getElementById('addRangeEnd').classList.remove('is-invalid');
+        } else {
+            qty.value = '';
+        }
+        validateAddRange();
+    }
+
+    function updateAddIndicator() { validateAddRange(); }
+
+    function validateAddRange() {
+        const mode = document.getElementById('addModeInput').value;
+        if (mode !== 'range') return;
+
+        const prefixSuffix = document.getElementById('addRangePrefixSuffix')?.value.trim() ?? '';
+        const fullPrefix   = addClientCode ? addClientCode + '-' + prefixSuffix : prefixSuffix;
+        document.getElementById('addRangePrefixHidden').value = fullPrefix;
+
+        const startRaw  = document.getElementById('addRangeStart').value.trim();
+        const endRaw    = document.getElementById('addRangeEnd').value.trim();
+        const start     = parseInt(startRaw, 10);
+        const end       = parseInt(endRaw, 10);
+        const qty       = parseInt(document.getElementById('addRangeQty').value, 10);
+        const indicator = document.getElementById('addRangeIndicator');
+        const btn       = document.getElementById('addAssetSubmitBtn');
+        const label     = document.getElementById('addAssetSubmitLabel');
+
+        const endInput = document.getElementById('addRangeEnd');
+
+        if (isNaN(start) || isNaN(end)) {
+            indicator.innerHTML = '';
+            endInput.classList.remove('is-invalid');
+            btn.disabled = true;
+            return;
+        }
+        if (end < start) {
+            endInput.classList.add('is-invalid');
+            indicator.innerHTML = '<div class="alert alert-danger py-2 px-3 mb-0 fs-13"><i class="ri-error-warning-line me-1"></i>End number cannot be less than Start number.</div>';
+            btn.disabled = true;
+            return;
+        }
+        endInput.classList.remove('is-invalid');
+        if (isNaN(qty)) {
+            indicator.innerHTML = '';
+            btn.disabled = true;
+            return;
+        }
+        const expected = end - start + 1;
+        const padLen   = endRaw.length;
+        const pad      = n => String(n).padStart(padLen, '0');
+        if (qty !== expected) {
+            indicator.innerHTML = `<span class="text-danger"><i class="ri-error-warning-line me-1"></i>Quantity must be ${expected}</span>`;
+            btn.disabled = true;
+            return;
+        }
+        const first = fullPrefix + pad(start);
+        const last  = fullPrefix + pad(end);
+        indicator.innerHTML = `<span class="text-success"><i class="ri-check-line me-1"></i>${first} to ${last}</span>`;
+        label.textContent = `Add ${expected} Assets`;
+        btn.disabled = false;
+    }
+
+    // Sync prefix hidden on submit
+    document.querySelector('#addAssetModal form').addEventListener('submit', function () {
+        const mode = document.getElementById('addModeInput').value;
+        if (mode === 'range') {
+            const prefixSuffix = document.getElementById('addRangePrefixSuffix')?.value.trim() ?? '';
+            const fullPrefix   = addClientCode ? addClientCode + '-' + prefixSuffix : prefixSuffix;
+            document.getElementById('addRangePrefixHidden').value = fullPrefix;
+        }
+    });
+
+    // Init mode on page load (handles validation-error re-render)
+    setAddMode(document.getElementById('addModeInput').value);
+
+    // ── Edit asset ───────────────────────────────────────────────────
+    const editClientCode   = '{{ $job->client->custom_client_code ?? '' }}';
+    const editAssetModal   = document.getElementById('editAssetModal');
+    const editAssetForm    = document.getElementById('editAssetForm');
+    const editSuffixInput  = document.getElementById('editAssetCodeSuffix');
+    const editHiddenInput  = document.getElementById('editAssetCodeHidden');
+
+    function syncEditCode() {
+        if (!editSuffixInput || !editHiddenInput) return;
+        const suffix = editSuffixInput.value.trim();
+        editHiddenInput.value = editClientCode ? editClientCode + '-' + suffix : suffix;
+    }
+
+    if (editSuffixInput) {
+        editSuffixInput.addEventListener('input', syncEditCode);
+        editAssetForm.addEventListener('submit', syncEditCode);
+    }
+
+    document.querySelectorAll('.btn-edit-asset').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const d = btn.dataset;
+            const baseUrl = '{{ route('technician.jobs.assets.update', [$job, '__ID__']) }}'.replace('__ID__', d.id);
+            editAssetForm.action = baseUrl;
+
+            // Strip client code prefix from asset_code for display in suffix field
+            let suffix = d.asset_code || '';
+            if (editClientCode && suffix.startsWith(editClientCode + '-')) {
+                suffix = suffix.slice(editClientCode.length + 1);
+            }
+            if (editSuffixInput) editSuffixInput.value = suffix;
+            syncEditCode();
+
+            const typeEl = document.getElementById('editAssetType');
+            if (typeEl) typeEl.value = d.asset_type || '';
+
+            const bldEl = document.getElementById('editAssetBuilding');
+            if (bldEl) bldEl.value = d.building_id || '';
+
+            document.getElementById('editAssetZone').value        = d.zone || '';
+            document.getElementById('editAssetGroupId').value     = d.group_id || '';
+            document.getElementById('editAssetMake').value        = d.make || '';
+            document.getElementById('editAssetModel').value       = d.model || '';
+            document.getElementById('editAssetSerial').value      = d.serial_or_batch || '';
+            document.getElementById('editAssetRating').value      = d.rating || '';
+            document.getElementById('editAssetFixingType').value  = d.fixing_type || '';
+            document.getElementById('editAssetInstallDate').value = d.install_date || '';
+            document.getElementById('editAssetNextDue').value     = d.next_inspection_due_date || '';
+
+            new bootstrap.Modal(editAssetModal).show();
+        });
+    });
+
+    // ── Delete asset ─────────────────────────────────────────────────
+    const deleteForm = document.getElementById('deleteAssetForm');
+
+    document.querySelectorAll('.btn-delete-asset').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const code   = btn.dataset.code;
+            const action = btn.dataset.action;
+            Swal.fire({
+                title: 'Remove Asset?',
+                html: `
+                    <p class="mb-2">You are about to remove <strong>${code}</strong> from the register.</p>
+                    <textarea id="swal-remarks" class="swal2-textarea" rows="3"
+                              placeholder="Reason for removal (required)..."
+                              style="width:100%; margin:0; resize:vertical"></textarea>
+                `,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: '<i class="ri-delete-bin-line me-1"></i>Remove Asset',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                reverseButtons: true,
+                focusCancel: true,
+                preConfirm: function () {
+                    const remarks = document.getElementById('swal-remarks').value.trim();
+                    if (!remarks) {
+                        Swal.showValidationMessage('Please enter a reason for removal.');
+                        return false;
+                    }
+                    return remarks;
+                },
+            }).then(function (result) {
+                if (result.isConfirmed && deleteForm) {
+                    deleteForm.action = action;
+                    // Inject remarks into the form
+                    let remarksInput = deleteForm.querySelector('input[name="remarks"]');
+                    if (!remarksInput) {
+                        remarksInput = document.createElement('input');
+                        remarksInput.type = 'hidden';
+                        remarksInput.name = 'remarks';
+                        deleteForm.appendChild(remarksInput);
+                    }
+                    remarksInput.value = result.value;
+                    deleteForm.submit();
+                }
+            });
+        });
+    });
+
+    // ── Asset code: prepend client code on submit ─────────────────────
+    const clientCode      = '{{ $job->client->custom_client_code ?? '' }}';
+    const suffixInput     = document.getElementById('assetCodeSuffix');
+    const hiddenCodeInput = document.getElementById('assetCodeHidden');
+
+    if (suffixInput && hiddenCodeInput) {
+        function syncAssetCode() {
+            const suffix = suffixInput.value.trim();
+            hiddenCodeInput.value = clientCode ? clientCode + '-' + suffix : suffix;
+        }
+        suffixInput.addEventListener('input', syncAssetCode);
+        syncAssetCode();
+
+        document.querySelector('#addAssetModal form')
+            .addEventListener('submit', syncAssetCode);
+    }
 
     const submitBtn = document.getElementById('submit-review-btn');
     if (submitBtn) {

@@ -76,6 +76,7 @@
                                     <th>Code</th>
                                     <th>Email</th>
                                     <th>Billing Contact</th>
+                                    <th>Manager</th>
                                     <th>Sites</th>
                                     <th>Status</th>
                                     <th>Created</th>
@@ -103,6 +104,7 @@
                                     <td><span class="badge bg-light text-dark">{{ $client->custom_client_code }}</span></td>
                                     <td class="text-muted fs-12">{{ $client->email ?? '—' }}</td>
                                     <td class="text-muted fs-12">{{ Str::limit($client->billing_contact_info, 40) ?? '—' }}</td>
+                                    <td class="text-muted fs-12">{{ $client->manager?->name ?? '—' }}</td>
                                     <td><span class="badge bg-primary-subtle text-primary">{{ $client->sites_count }}</span></td>
                                     <td>
                                         @if($client->status === 'active')
@@ -175,6 +177,18 @@
                                                                 <textarea name="billing_contact_info" class="form-control" rows="3">{{ $client->billing_contact_info }}</textarea>
                                                             </div>
                                                             <div class="mb-3">
+                                                                <label class="form-label">Manager</label>
+                                                                <select name="manager_id" class="form-select">
+                                                                    <option value="">— No Manager —</option>
+                                                                    @foreach($managers as $manager)
+                                                                    <option value="{{ $manager->id }}"
+                                                                        {{ $client->manager_id === $manager->id ? 'selected' : '' }}>
+                                                                        {{ $manager->name }}
+                                                                    </option>
+                                                                    @endforeach
+                                                                </select>
+                                                            </div>
+                                                            <div class="mb-3">
                                                                 <label class="form-label">Status <span class="text-danger">*</span></label>
                                                                 <select name="status" class="form-select" required>
                                                                     <option value="active"   {{ $client->status === 'active'   ? 'selected' : '' }}>Active</option>
@@ -218,7 +232,7 @@
                                 </tr>
                                 @empty
                                 <tr>
-                                    <td colspan="10" class="text-center text-muted py-5">
+                                    <td colspan="11" class="text-center text-muted py-5">
                                         <i class="ri-building-2-line fs-24 d-block mb-2"></i>No clients found.
                                     </td>
                                 </tr>
@@ -292,6 +306,19 @@
                                       placeholder="Contact name, email, phone...">{{ old('billing_contact_info') }}</textarea>
                         </div>
                         <div class="mb-3">
+                            <label class="form-label">Manager</label>
+                            <select name="manager_id" class="form-select">
+                                <option value="">— No Manager —</option>
+                                @foreach($managers as $manager)
+                                <option value="{{ $manager->id }}"
+                                    {{ old('manager_id') === $manager->id ? 'selected' : '' }}>
+                                    {{ $manager->name }}
+                                </option>
+                                @endforeach
+                            </select>
+                            @error('manager_id')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="mb-3">
                             <label class="form-label">Status <span class="text-danger">*</span></label>
                             <select name="status" class="form-select" required>
                                 <option value="active"   {{ old('status', 'active') === 'active'   ? 'selected' : '' }}>Active</option>
@@ -322,7 +349,7 @@
         }
     }
 
-    @if($errors->has('name') || $errors->has('email') || $errors->has('custom_client_code') || $errors->has('status') || $errors->has('logo'))
+    @if($errors->has('name') || $errors->has('email') || $errors->has('custom_client_code') || $errors->has('status') || $errors->has('logo') || $errors->has('manager_id'))
     document.addEventListener('DOMContentLoaded', function () {
         new bootstrap.Modal(document.getElementById('createClientModal')).show();
     });

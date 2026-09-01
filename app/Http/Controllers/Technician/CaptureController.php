@@ -120,10 +120,18 @@ class CaptureController extends Controller
             'assets.*.reason_for_result'       => ['nullable', 'string', 'max:1000'],
             'assets.*.recommendation'          => ['nullable', 'string', 'max:1000'],
             'assets.*.required_action'         => ['nullable', 'string', 'max:1000'],
+            'photos'                           => ['nullable', 'array'],
+            'photos.*'                         => ['nullable', 'image', 'max:5120'],
             'answers'                          => ['nullable', 'array'],
             'answers.*'                        => ['nullable', 'array'],
             'answers.*.*'                      => ['nullable', 'string', 'max:2000'],
         ]);
+
+        // Store uploaded photos before the transaction so file I/O is outside the DB lock
+        $uploadedPhotos = [];
+        foreach ($request->file('photos', []) as $assetId => $file) {
+            $uploadedPhotos[$assetId] = $file->store('inspection-photos', 'public');
+        }
 
         $isSavingDraft  = $request->boolean('save_as_draft');
         $isResubmission = $job->status === 'rectification_required';
@@ -140,7 +148,7 @@ class CaptureController extends Controller
 
         $records = collect($data['assets'] ?? [])
             ->filter(fn ($rec) => !empty($rec['result']))
-            ->filter(function ($rec, $assetId) use ($assignedBuildingIds, $availableIds, $assetBuildingMap) {
+            ->filter(function ($_rec, $assetId) use ($assignedBuildingIds, $availableIds, $assetBuildingMap) {
                 if ($assignedBuildingIds->isEmpty()) return true; // no building restriction
                 $bldId = $assetBuildingMap->get($assetId);
                 return $bldId === null || $availableIds->contains($bldId);
@@ -169,13 +177,15 @@ class CaptureController extends Controller
 
         $docStatus = $isSavingDraft ? 'draft' : 'submitted';
 
-        DB::transaction(function () use ($data, $job, $records, $allAnswers, $docStatus, &$saved, &$submittedAssetIds) {
+        DB::transaction(function () use ($data, $job, $records, $allAnswers, $docStatus, $uploadedPhotos, &$saved, &$submittedAssetIds) {
             foreach ($records as $assetId => $rec) {
                 // Only draft records are editable; submitted/approved records are locked
                 $existing = InspectionRecord::where('job_id', $job->id)
                     ->where('asset_id', $assetId)
                     ->where('document_status', 'draft')
                     ->first();
+
+                $newPhoto = $uploadedPhotos[$assetId] ?? null;
 
                 if ($existing) {
                     $existing->answers()->delete();
@@ -187,6 +197,7 @@ class CaptureController extends Controller
                         'reason_for_result'  => $rec['reason_for_result']  ?? null,
                         'recommendation'     => $rec['recommendation']     ?? null,
                         'required_action'    => $rec['required_action']    ?? null,
+                        'photo_path'         => $newPhoto ?? $existing->photo_path,
                         'document_status'    => $docStatus,
                     ]);
                     $inspectionRecord = $existing;
@@ -206,6 +217,7 @@ class CaptureController extends Controller
                         'reason_for_result'      => $rec['reason_for_result']  ?? null,
                         'recommendation'         => $rec['recommendation']     ?? null,
                         'required_action'        => $rec['required_action']    ?? null,
+                        'photo_path'             => $newPhoto,
                         'document_status'        => $docStatus,
                         'is_current'             => false,
                         'previous_inspection_id' => $previous?->id,
@@ -233,7 +245,7 @@ class CaptureController extends Controller
                 $saved++;
             }
 
-            if ($job->status === 'scheduled' && $saved > 0) {
+            if (in_array($job->status, ['new', 'scheduled']) && $saved > 0) {
                 $job->update(['status' => 'in_progress']);
             }
         });

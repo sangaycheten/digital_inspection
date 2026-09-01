@@ -114,14 +114,9 @@
 
         <div class="card-body border-bottom pb-3">
             <form method="GET" action="{{ route('reviewer.inspections.index') }}" class="row g-2 align-items-end">
-                <div class="col-md-3">
-                    <label class="form-label text-muted fs-12 mb-1">Status</label>
-                    <select name="status" class="form-select form-select-sm">
-                        <option value="">All</option>
-                        <option value="submitted" {{ request('status') === 'submitted' ? 'selected' : '' }}>Pending Review</option>
-                        <option value="approved"  {{ request('status') === 'approved'  ? 'selected' : '' }}>Approved</option>
-                    </select>
-                </div>
+                @if(request('status'))
+                <input type="hidden" name="status" value="{{ request('status') }}">
+                @endif
                 <div class="col-md-3">
                     <label class="form-label text-muted fs-12 mb-1">Technician</label>
                     <select name="technician_id" class="form-select form-select-sm">
@@ -135,7 +130,8 @@
                 </div>
                 <div class="col-md-auto">
                     <button type="submit" class="btn btn-primary btn-sm"><i class="ri-search-line me-1"></i>Filter</button>
-                    <a href="{{ route('reviewer.inspections.index') }}" class="btn btn-light btn-sm ms-1"><i class="ri-refresh-line"></i> Reset</a>
+                    <a href="{{ route('reviewer.inspections.index', request('status') ? ['status' => request('status')] : []) }}"
+                       class="btn btn-light btn-sm ms-1"><i class="ri-refresh-line"></i> Reset</a>
                 </div>
             </form>
         </div>
