@@ -72,11 +72,13 @@
                         <i class="ri-map-pin-line me-2 text-primary"></i>All Sites
                         <span class="badge bg-primary-subtle text-primary ms-1">{{ $sites->total() }}</span>
                     </h5>
+                    @can('add sites')
                     @if($clients->isNotEmpty())
                     <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#createSiteModal">
                         <i class="ri-add-line me-1"></i> Add Site
                     </button>
                     @endif
+                    @endcan
                 </div>
 
                 <div class="card-body border-bottom pb-3">
@@ -147,14 +149,18 @@
                                     </td>
                                     <td>
                                         <div class="hstack gap-1">
+                                            @can('edit sites')
                                             <button type="button" class="btn btn-sm btn-outline-primary"
                                                     data-bs-toggle="modal" data-bs-target="#editSiteModal{{ $site->id }}">
                                                 <i class="ri-edit-line"></i>
                                             </button>
+                                            @endcan
+                                            @can('delete sites')
                                             <button type="button" class="btn btn-sm btn-outline-danger"
                                                     data-bs-toggle="modal" data-bs-target="#deleteSiteModal{{ $site->id }}">
                                                 <i class="ri-delete-bin-line"></i>
                                             </button>
+                                            @endcan
                                         </div>
 
                                         {{-- Edit Modal --}}
@@ -181,7 +187,7 @@
                                                                 </div>
                                                                 <div class="col-md-6">
                                                                     <label class="form-label">Site Name</label>
-                                                                    <input type="text" name="name" class="form-control" value="{{ $site->name }}" placeholder="e.g. HQ Building">
+                                                                    <input type="text" name="name" class="form-control" value="{{ $site->name }}" placeholder="">
                                                                 </div>
                                                                 <div class="col-12">
                                                                     <label class="form-label">Address <span class="text-danger">*</span></label>
@@ -320,7 +326,7 @@
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Site Name</label>
-                                <input type="text" name="name" class="form-control" value="{{ old('name') }}" placeholder="e.g. HQ Building">
+                                <input type="text" name="name" class="form-control" value="{{ old('name') }}" placeholder="">
                             </div>
                             <div class="col-12">
                                 <label class="form-label">Address <span class="text-danger">*</span></label>

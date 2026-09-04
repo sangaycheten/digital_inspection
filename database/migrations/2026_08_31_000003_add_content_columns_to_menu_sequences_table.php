@@ -27,7 +27,7 @@ return new class extends Migration
         // Populate top-level rows for system-administrator
         $topLevel = [
             'dashboard'      => ['section' => 'Main',           'label' => 'Dashboard',     'icon' => 'ri-dashboard-2-line',  'route' => 'admin.dashboard'],
-            'user-role'      => ['section' => 'Administration', 'label' => 'Settings',       'icon' => 'ri-settings-3-line',   'canany' => json_encode(['manage users', 'assign roles', 'permission']), 'collapse_id' => 'sidebarUserRole'],
+            'user-role'      => ['section' => 'Administration', 'label' => 'User & Role Management', 'icon' => 'ri-shield-user-line', 'canany' => json_encode(['manage users', 'assign roles', 'manage permissions']), 'collapse_id' => 'sidebarUserRole'],
             'audit-log'      => ['section' => 'Administration', 'icon' => 'ri-history-line',  'permission' => 'view audit log', 'route' => 'admin.audit-log.index',     'pattern' => 'admin.audit-log.*'],
             'master-data'    => ['section' => 'Administration', 'icon' => 'ri-database-2-line','permission' => 'manage master', 'collapse_id' => 'sidebarMaster'],
             'questionnaires' => ['section' => 'Administration', 'label' => 'Questionnaires', 'icon' => 'ri-questionnaire-line','route' => 'admin.questionnaires.index',  'pattern' => 'admin.questionnaires.*'],
@@ -49,7 +49,7 @@ return new class extends Migration
             // Settings (user-role)
             ['parent_key' => 'user-role', 'key' => 'manage-users',  'data' => ['permission' => 'manage users', 'icon' => 'ri-team-line',           'route' => 'admin.users.index',       'pattern' => 'admin.users.*']],
             ['parent_key' => 'user-role', 'key' => 'assign-roles',  'data' => ['permission' => 'assign roles', 'icon' => 'ri-shield-keyhole-line', 'route' => 'admin.rbac.index',        'pattern' => 'admin.rbac.*']],
-            ['parent_key' => 'user-role', 'key' => 'permission',    'data' => ['permission' => 'permission',   'icon' => 'ri-key-2-line',           'route' => 'admin.permissions.index', 'pattern' => 'admin.permissions.*']],
+            ['parent_key' => 'user-role', 'key' => 'permission',    'data' => ['permission' => 'manage permissions', 'label' => 'Manage Permissions', 'icon' => 'ri-key-2-line', 'route' => 'admin.permissions.index', 'pattern' => 'admin.permissions.*']],
             ['parent_key' => 'user-role', 'key' => 'menu-elements', 'data' => ['label' => 'Menu Elements',    'icon' => 'ri-menu-2-line',           'route' => 'admin.menu.index',        'pattern' => 'admin.menu.*']],
 
             // Manage Master (master-data)

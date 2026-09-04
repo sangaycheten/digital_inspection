@@ -1,9 +1,11 @@
 <?php
 
 use App\Http\Controllers\Admin\AssetController;
+use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\InspectionController as AdminInspectionController;
 use App\Http\Controllers\Reviewer\InspectionController as ReviewerInspectionController;
 use App\Http\Controllers\Technician\CaptureController as TechnicianCaptureController;
+use App\Http\Controllers\Technician\DashboardController as TechnicianDashboardController;
 use App\Http\Controllers\Technician\JobController as TechnicianJobController;
 use App\Http\Controllers\Admin\JobController;
 use App\Http\Controllers\Admin\AuditLogController;
@@ -34,91 +36,87 @@ Route::get('/', function () {
 
 // System Administrator — dashboard and questionnaires (admin-only)
 Route::middleware(['auth', 'role:system-administrator'])->prefix('admin')->name('admin.')->group(function () {
-    Route::get('/dashboard', function () {
-        return view('admin.dashboard', [
-            'userCount' => \App\Models\User::count(),
-        ]);
-    })->name('dashboard');
+    Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('dashboard');
 
     // Menu Elements
     Route::get('/menu-elements', [MenuElementController::class, 'index'])->name('menu.index');
     Route::post('/menu-elements/{item}/move-up', [MenuElementController::class, 'moveUp'])->name('menu.moveUp');
     Route::post('/menu-elements/{item}/move-down', [MenuElementController::class, 'moveDown'])->name('menu.moveDown');
+    Route::put('/menu-elements/{item}', [MenuElementController::class, 'update'])->name('menu.update');
+    Route::delete('/menu-elements/{item}', [MenuElementController::class, 'destroy'])->name('menu.destroy');
 
-    // Questionnaires
+    // Questionnaires — action-level permissions
     Route::prefix('questionnaires')->name('questionnaires.')->group(function () {
-        Route::get('/', [QuestionnaireController::class, 'index'])->name('index');
-        Route::post('/', [QuestionnaireController::class, 'store'])->name('store');
-        Route::get('/create', [QuestionnaireController::class, 'create'])->name('create');
-        Route::get('/{questionnaire}/edit', [QuestionnaireController::class, 'edit'])->name('edit');
-        Route::post('/{parent}/sub-group', [QuestionnaireController::class, 'updateSubGroup'])->name('sub-group.update');
-        Route::put('/{questionnaire}', [QuestionnaireController::class, 'update'])->name('update');
-        Route::delete('/{questionnaire}', [QuestionnaireController::class, 'destroy'])->name('destroy');
+        Route::get('/',                   [QuestionnaireController::class, 'index'])       ->name('index')          ->middleware('permission:view questionnaires');
+        Route::get('/create',             [QuestionnaireController::class, 'create'])      ->name('create')         ->middleware('permission:add questionnaires');
+        Route::post('/',                  [QuestionnaireController::class, 'store'])       ->name('store')          ->middleware('permission:add questionnaires');
+        Route::get('/{questionnaire}/edit',   [QuestionnaireController::class, 'edit'])   ->name('edit')           ->middleware('permission:edit questionnaires');
+        Route::put('/{questionnaire}',        [QuestionnaireController::class, 'update']) ->name('update')         ->middleware('permission:edit questionnaires');
+        Route::post('/{parent}/sub-group',    [QuestionnaireController::class, 'updateSubGroup'])->name('sub-group.update')->middleware('permission:edit questionnaires');
+        Route::post('/{questionnaire}/move-up',   [QuestionnaireController::class, 'moveUp'])  ->name('move-up')   ->middleware('permission:edit questionnaires');
+        Route::post('/{questionnaire}/move-down', [QuestionnaireController::class, 'moveDown'])->name('move-down') ->middleware('permission:edit questionnaires');
+        Route::delete('/{questionnaire}', [QuestionnaireController::class, 'destroy'])    ->name('destroy')        ->middleware('permission:delete questionnaires');
     });
 });
 
-// Master Data — system-administrator and manager only (via permission:manage master)
-Route::middleware(['auth', 'permission:manage master'])->prefix('admin/master')->name('admin.master.')->group(function () {
-    Route::get('/clients', [ClientController::class, 'index'])->name('clients.index');
-    Route::post('/clients', [ClientController::class, 'store'])->name('clients.store');
-    Route::put('/clients/{client}', [ClientController::class, 'update'])->name('clients.update');
-    Route::delete('/clients/{client}', [ClientController::class, 'destroy'])->name('clients.destroy');
+// Master Data — action-level permissions per section
+Route::middleware('auth')->prefix('admin/master')->name('admin.master.')->group(function () {
+    Route::get('/clients',              [ClientController::class, 'index'])  ->name('clients.index')   ->middleware('permission:view clients');
+    Route::post('/clients',             [ClientController::class, 'store'])  ->name('clients.store')   ->middleware('permission:add clients');
+    Route::put('/clients/{client}',     [ClientController::class, 'update']) ->name('clients.update')  ->middleware('permission:edit clients');
+    Route::delete('/clients/{client}',  [ClientController::class, 'destroy'])->name('clients.destroy') ->middleware('permission:delete clients');
 
-    Route::get('/sites', [SiteController::class, 'index'])->name('sites.index');
-    Route::post('/sites', [SiteController::class, 'store'])->name('sites.store');
-    Route::put('/sites/{site}', [SiteController::class, 'update'])->name('sites.update');
-    Route::delete('/sites/{site}', [SiteController::class, 'destroy'])->name('sites.destroy');
+    Route::get('/sites',                [SiteController::class, 'index'])  ->name('sites.index')   ->middleware('permission:view sites');
+    Route::post('/sites',               [SiteController::class, 'store'])  ->name('sites.store')   ->middleware('permission:add sites');
+    Route::put('/sites/{site}',         [SiteController::class, 'update']) ->name('sites.update')  ->middleware('permission:edit sites');
+    Route::delete('/sites/{site}',      [SiteController::class, 'destroy'])->name('sites.destroy') ->middleware('permission:delete sites');
 
-    Route::get('/buildings', [BuildingController::class, 'index'])->name('buildings.index');
-    Route::post('/buildings', [BuildingController::class, 'store'])->name('buildings.store');
-    Route::put('/buildings/{building}', [BuildingController::class, 'update'])->name('buildings.update');
-    Route::delete('/buildings/{building}', [BuildingController::class, 'destroy'])->name('buildings.destroy');
+    Route::get('/buildings',              [BuildingController::class, 'index'])  ->name('buildings.index')   ->middleware('permission:view buildings');
+    Route::post('/buildings',             [BuildingController::class, 'store'])  ->name('buildings.store')   ->middleware('permission:add buildings');
+    Route::put('/buildings/{building}',   [BuildingController::class, 'update']) ->name('buildings.update')  ->middleware('permission:edit buildings');
+    Route::delete('/buildings/{building}',[BuildingController::class, 'destroy'])->name('buildings.destroy') ->middleware('permission:delete buildings');
 
-    Route::get('/lookups', [MasterLookupController::class, 'index'])->name('lookups.index');
-    Route::post('/lookups', [MasterLookupController::class, 'store'])->name('lookups.store');
-    Route::put('/lookups/{lookup}', [MasterLookupController::class, 'update'])->name('lookups.update');
-    Route::delete('/lookups/{lookup}', [MasterLookupController::class, 'destroy'])->name('lookups.destroy');
+    Route::get('/lookups',              [MasterLookupController::class, 'index'])  ->name('lookups.index')   ->middleware('permission:view reference data');
+    Route::post('/lookups',             [MasterLookupController::class, 'store'])  ->name('lookups.store')   ->middleware('permission:add reference data');
+    Route::put('/lookups/{lookup}',     [MasterLookupController::class, 'update']) ->name('lookups.update')  ->middleware('permission:edit reference data');
+    Route::delete('/lookups/{lookup}',  [MasterLookupController::class, 'destroy'])->name('lookups.destroy') ->middleware('permission:delete reference data');
+    Route::post('/lookups/{lookup}/reorder', [MasterLookupController::class, 'reorder'])->name('lookups.reorder')->middleware('permission:edit reference data');
 
-    Route::get('/sections', [SectionController::class, 'index'])->name('sections.index');
-    Route::post('/sections', [SectionController::class, 'store'])->name('sections.store');
-    Route::put('/sections/{section}', [SectionController::class, 'update'])->name('sections.update');
-    Route::delete('/sections/{section}', [SectionController::class, 'destroy'])->name('sections.destroy');
+    Route::get('/sections',             [SectionController::class, 'index'])  ->name('sections.index')   ->middleware('permission:view sections');
+    Route::post('/sections',            [SectionController::class, 'store'])  ->name('sections.store')   ->middleware('permission:add sections');
+    Route::put('/sections/{section}',   [SectionController::class, 'update']) ->name('sections.update')  ->middleware('permission:edit sections');
+    Route::delete('/sections/{section}',[SectionController::class, 'destroy'])->name('sections.destroy') ->middleware('permission:delete sections');
 
-    Route::get('/data-types', [DataTypeController::class, 'index'])->name('data-types.index');
-    Route::post('/data-types', [DataTypeController::class, 'store'])->name('data-types.store');
-    Route::put('/data-types/{fieldType}', [DataTypeController::class, 'update'])->name('data-types.update');
-    Route::delete('/data-types/{fieldType}', [DataTypeController::class, 'destroy'])->name('data-types.destroy');
+    Route::get('/data-types',               [DataTypeController::class, 'index'])  ->name('data-types.index')   ->middleware('permission:view data types');
+    Route::post('/data-types',              [DataTypeController::class, 'store'])  ->name('data-types.store')   ->middleware('permission:add data types');
+    Route::put('/data-types/{fieldType}',   [DataTypeController::class, 'update']) ->name('data-types.update')  ->middleware('permission:edit data types');
+    Route::delete('/data-types/{fieldType}',[DataTypeController::class, 'destroy'])->name('data-types.destroy') ->middleware('permission:delete data types');
 
-    Route::get('/hierarchy', [HierarchyController::class, 'index'])->name('hierarchy.index');
-    Route::put('/hierarchy/{client}', [HierarchyController::class, 'update'])->name('hierarchy.update');
+    Route::get('/hierarchy',            [HierarchyController::class, 'index']) ->name('hierarchy.index')  ->middleware('permission:view client assignments');
+    Route::put('/hierarchy/{client}',   [HierarchyController::class, 'update'])->name('hierarchy.update') ->middleware('permission:edit client assignments');
 });
 
 // System Settings — locked to system-administrator and manager only, with per-permission granularity
 Route::middleware(['auth', 'role:system-administrator|manager'])->prefix('admin')->name('admin.')->group(function () {
-    // Users
-    Route::middleware('permission:manage users')->group(function () {
-        Route::get('/users', [RegisteredUserController::class, 'index'])->name('users.index');
-        Route::get('/users/create', [RegisteredUserController::class, 'create'])->name('users.create');
-        Route::post('/users', [RegisteredUserController::class, 'store'])->name('users.store');
-        Route::get('/users/{user}/edit', [RegisteredUserController::class, 'edit'])->name('users.edit');
-        Route::put('/users/{user}', [RegisteredUserController::class, 'update'])->name('users.update');
-        Route::delete('/users/{user}', [RegisteredUserController::class, 'destroy'])->name('users.destroy');
-        Route::patch('/users/{user}/restore', [RegisteredUserController::class, 'restore'])->name('users.restore')->withTrashed();
-        Route::post('/users/{user}/send-credentials', [RegisteredUserController::class, 'sendCredentials'])->name('users.send-credentials');
-    });
+    // Users — action-level permissions
+    Route::get('/users',                    [RegisteredUserController::class, 'index'])          ->name('users.index')            ->middleware('permission:view users');
+    Route::get('/users/create',             [RegisteredUserController::class, 'create'])         ->name('users.create')           ->middleware('permission:add users');
+    Route::post('/users',                   [RegisteredUserController::class, 'store'])          ->name('users.store')            ->middleware('permission:add users');
+    Route::get('/users/{user}/edit',        [RegisteredUserController::class, 'edit'])           ->name('users.edit')             ->middleware('permission:edit users');
+    Route::put('/users/{user}',             [RegisteredUserController::class, 'update'])         ->name('users.update')           ->middleware('permission:edit users');
+    Route::delete('/users/{user}',          [RegisteredUserController::class, 'destroy'])        ->name('users.destroy')          ->middleware('permission:delete users');
+    Route::patch('/users/{user}/restore',   [RegisteredUserController::class, 'restore'])        ->name('users.restore')          ->middleware('permission:edit users')->withTrashed();
+    Route::post('/users/{user}/send-credentials', [RegisteredUserController::class, 'sendCredentials'])->name('users.send-credentials')->middleware('permission:edit users');
 
     // Roles (RBAC matrix)
-    Route::middleware('permission:assign roles')->group(function () {
-        Route::get('/rbac', [RbacController::class, 'index'])->name('rbac.index');
-        Route::put('/rbac', [RbacController::class, 'update'])->name('rbac.update');
-    });
+    Route::get('/rbac',  [RbacController::class, 'index']) ->name('rbac.index')  ->middleware('permission:view roles');
+    Route::put('/rbac',  [RbacController::class, 'update'])->name('rbac.update') ->middleware('permission:edit roles');
 
-    // Permissions
-    Route::middleware('permission:permission')->group(function () {
-        Route::get('/permissions', [PermissionController::class, 'index'])->name('permissions.index');
-        Route::post('/permissions', [PermissionController::class, 'store'])->name('permissions.store');
-        Route::delete('/permissions/{permission}', [PermissionController::class, 'destroy'])->name('permissions.destroy');
-    });
+    // Permissions — action-level
+    Route::get('/permissions',                    [PermissionController::class, 'index'])  ->name('permissions.index')  ->middleware('permission:view permissions');
+    Route::post('/permissions',                   [PermissionController::class, 'store'])  ->name('permissions.store')  ->middleware('permission:add permissions');
+    Route::put('/permissions/{permission}',       [PermissionController::class, 'update']) ->name('permissions.update') ->middleware('permission:edit permissions');
+    Route::delete('/permissions/{permission}',    [PermissionController::class, 'destroy'])->name('permissions.destroy')->middleware('permission:delete permissions');
 
     // Audit Log
     Route::middleware('permission:view audit log')->group(function () {
@@ -197,16 +195,7 @@ Route::middleware(['auth', 'role:manager'])->prefix('reviewer')->name('reviewer.
 
 // Field Technician
 Route::middleware(['auth', 'role:field-technician'])->prefix('technician')->name('technician.')->group(function () {
-    Route::get('/dashboard', function () {
-        $activeStatuses = ['new', 'scheduled', 'in_progress', 'rectification_required'];
-        $workTypeCounts = \App\Models\Job::whereHas('technicians', fn ($q) => $q->where('users.id', \Illuminate\Support\Facades\Auth::id()))
-            ->whereIn('status', $activeStatuses)
-            ->selectRaw('work_type, count(*) as total')
-            ->groupBy('work_type')
-            ->pluck('total', 'work_type');
-
-        return view('technician.dashboard', compact('workTypeCounts'));
-    })->name('dashboard');
+    Route::get('/dashboard', [TechnicianDashboardController::class, 'index'])->name('dashboard');
 
     Route::get('/jobs',          [TechnicianJobController::class, 'index'])->name('jobs.index');
     Route::get('/jobs/{job}',    [TechnicianJobController::class, 'show'])->name('jobs.show');
@@ -220,6 +209,10 @@ Route::middleware(['auth', 'role:field-technician'])->prefix('technician')->name
 
     Route::get('/jobs/{job}/install',  [TechnicianCaptureController::class, 'installForm'])->name('jobs.install');
     Route::post('/jobs/{job}/install', [TechnicianCaptureController::class, 'installStore'])->name('jobs.install.store');
+
+    Route::get('/jobs/{job}/register-inspect',  [TechnicianCaptureController::class, 'registerInspectForm'])->name('jobs.register-inspect');
+    Route::post('/jobs/{job}/register-inspect', [TechnicianCaptureController::class, 'registerInspectStore'])->name('jobs.register-inspect.store');
+    Route::get('/jobs/{job}/check-asset-codes', [TechnicianCaptureController::class, 'checkAssetCodes'])->name('jobs.check-asset-codes');
 });
 
 // Client User

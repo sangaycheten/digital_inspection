@@ -16,7 +16,7 @@ return new class extends Migration
             // Settings (user-role)
             ['parent_key' => 'user-role', 'key' => 'manage-users',  'permission' => 'manage users', 'icon' => 'ri-team-line',           'route' => 'admin.users.index',       'pattern' => 'admin.users.*'],
             ['parent_key' => 'user-role', 'key' => 'assign-roles',  'permission' => 'assign roles', 'icon' => 'ri-shield-keyhole-line', 'route' => 'admin.rbac.index',        'pattern' => 'admin.rbac.*'],
-            ['parent_key' => 'user-role', 'key' => 'permission',    'permission' => 'permission',   'icon' => 'ri-key-2-line',          'route' => 'admin.permissions.index', 'pattern' => 'admin.permissions.*'],
+            ['parent_key' => 'user-role', 'key' => 'permission',    'permission' => 'manage permissions', 'label' => 'Manage Permissions', 'icon' => 'ri-key-2-line', 'route' => 'admin.permissions.index', 'pattern' => 'admin.permissions.*'],
             ['parent_key' => 'user-role', 'key' => 'menu-elements', 'label'      => 'Menu Elements','icon' => 'ri-menu-2-line',          'route' => 'admin.menu.index',        'pattern' => 'admin.menu.*'],
 
             // Manage Master (master-data)

@@ -28,11 +28,12 @@
     <div class="row">
         <div class="col-12">
             <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                <h4 class="mb-sm-0">RBAC / Roles & Permissions</h4>
+                <h4 class="mb-sm-0">Roles & Permissions</h4>
                 <div class="page-title-right">
                     <ol class="breadcrumb m-0">
                         <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}">Home</a></li>
-                        <li class="breadcrumb-item active">RBAC / Roles</li>
+                        <li class="breadcrumb-item">User & Role Management</li>
+                        <li class="breadcrumb-item active">Roles & Permissions</li>
                     </ol>
                 </div>
             </div>
@@ -105,9 +106,11 @@
                     <h4 class="card-title mb-0 flex-grow-1">
                         <i class="ri-table-line me-2 text-primary"></i>Permission Matrix
                     </h4>
+                    @can('edit roles')
                     <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editPermissionsModal">
                         <i class="ri-edit-line me-1"></i> Edit Permissions
                     </button>
+                    @endcan
                 </div>
                 <div class="card-body p-0">
                     <div class="permission-matrix-scroll">

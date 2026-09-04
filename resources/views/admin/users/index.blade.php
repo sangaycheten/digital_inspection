@@ -8,6 +8,7 @@
                 <div class="page-title-right">
                     <ol class="breadcrumb m-0">
                         <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}">Home</a></li>
+                        <li class="breadcrumb-item">User & Role Management</li>
                         <li class="breadcrumb-item active">Users</li>
                     </ol>
                 </div>
@@ -24,9 +25,11 @@
                         All Users
                         <span class="badge bg-primary-subtle text-primary ms-1">{{ $users->total() }}</span>
                     </h5>
+                    @can('add users')
                     <a href="{{ route('admin.users.create') }}" class="btn btn-primary btn-sm">
                         <i class="ri-user-add-line align-middle me-1"></i> Add User
                     </a>
+                    @endcan
                 </div>
                 <div class="card-body border-bottom pb-3">
                     <form method="GET" action="{{ route('admin.users.index') }}" class="row g-2 align-items-end">
@@ -83,6 +86,7 @@
                                     <th>Role</th>
                                     <th>Site</th>
                                     <th>Verified</th>
+                                    <th>Password</th>
                                     <th>Created</th>
                                     <th>Last Edited</th>
                                     <th>Actions</th>
@@ -137,6 +141,17 @@
                                             @endif
                                         </td>
                                         <td>
+                                            @if ($user->has_password)
+                                                <span class="badge bg-success-subtle text-success" title="Password has been set">
+                                                    <i class="ri-lock-password-line me-1"></i>Set
+                                                </span>
+                                            @else
+                                                <span class="badge bg-danger-subtle text-danger" title="No password — send credentials to enable login">
+                                                    <i class="ri-lock-unlock-line me-1"></i>Not Set
+                                                </span>
+                                            @endif
+                                        </td>
+                                        <td>
                                             <div class="fs-12">{{ $user->created_at->format('d M Y, H:i') }}</div>
                                             @if($user->creator)
                                                 <div class="text-muted fs-11">by {{ $user->creator->name }}</div>
@@ -154,6 +169,7 @@
                                         </td>
                                         <td>
                                             <div class="hstack gap-2">
+                                                @can('edit users')
                                                 <a href="{{ route('admin.users.edit', $user) }}"
                                                    class="btn btn-sm btn-outline-primary"
                                                    title="Edit">
@@ -166,6 +182,8 @@
                                                         data-bs-target="#credentialsModal{{ $user->id }}">
                                                     <i class="ri-mail-send-line"></i>
                                                 </button>
+                                                @endcan
+                                                @can('delete users')
                                                 @if($user->id !== request()->user()?->id)
                                                 <button type="button"
                                                         class="btn btn-sm btn-outline-danger"
@@ -175,6 +193,7 @@
                                                     <i class="ri-delete-bin-line"></i>
                                                 </button>
                                                 @endif
+                                                @endcan
                                             </div>
 
                                             {{-- Send Credentials Modal --}}
@@ -332,6 +351,7 @@
                                     </td>
                                     <td>{{ $user->deleted_at->format('d M Y, H:i') }}</td>
                                     <td>
+                                        @can('edit users')
                                         <form method="POST" action="{{ route('admin.users.restore', $user->id) }}">
                                             @csrf
                                             @method('PATCH')
@@ -339,6 +359,7 @@
                                                 <i class="ri-restart-line me-1"></i> Restore
                                             </button>
                                         </form>
+                                        @endcan
                                     </td>
                                 </tr>
                                 @endforeach

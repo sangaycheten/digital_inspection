@@ -51,11 +51,13 @@
                         <i class="ri-home-office-line me-2 text-primary"></i>All Buildings
                         <span class="badge bg-primary-subtle text-primary ms-1">{{ $buildings->total() }}</span>
                     </h5>
+                    @can('add buildings')
                     @if($sites->isNotEmpty())
                     <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#createBuildingModal">
                         <i class="ri-add-line me-1"></i> Add Building
                     </button>
                     @endif
+                    @endcan
                 </div>
 
                 <div class="card-body border-bottom pb-3">
@@ -113,7 +115,7 @@
                                             <div class="d-flex flex-wrap gap-1">
                                                 @foreach($building->roof_zones as $zone)
                                                     @if(is_array($zone))
-                                                        <span class="badge" style="background:{{ $zone['color'] ?? '#6c757d' }}; color:#fff">
+                                                        <span class="badge" style="<?= 'background:'.e($zone['color'] ?? '#6c757d').';color:#fff' ?>">
                                                             {{ $zone['name'] ?? '?' }}
                                                         </span>
                                                     @else
@@ -128,14 +130,18 @@
                                     <td class="text-muted fs-12">{{ $building->created_at->format('d M Y') }}</td>
                                     <td>
                                         <div class="hstack gap-1">
+                                            @can('edit buildings')
                                             <button type="button" class="btn btn-sm btn-outline-primary"
                                                     data-bs-toggle="modal" data-bs-target="#editBuildingModal{{ $building->id }}">
                                                 <i class="ri-edit-line"></i>
                                             </button>
+                                            @endcan
+                                            @can('delete buildings')
                                             <button type="button" class="btn btn-sm btn-outline-danger"
                                                     data-bs-toggle="modal" data-bs-target="#deleteBuildingModal{{ $building->id }}">
                                                 <i class="ri-delete-bin-line"></i>
                                             </button>
+                                            @endcan
                                         </div>
 
                                         {{-- Edit Modal --}}
@@ -174,13 +180,18 @@
                                                                         <option value="{{ $site->id }}"
                                                                                 data-client="{{ $site->client_id }}"
                                                                                 {{ $building->site_id == $site->id ? 'selected' : '' }}
-                                                                                style="{{ $building->site->client_id == $site->client_id ? '' : 'display:none' }}">
+                                                                                @if($building->site->client_id != $site->client_id) style="display:none" @endif>
                                                                             {{ $site->name ?: Str::limit($site->address, 40) }}
                                                                         </option>
                                                                         @endforeach
                                                                     </select>
                                                                 </div>
-                                                                <div class="col-12">
+                                                                <div class="col-md-4">
+                                                                    <label class="form-label">Building Code <span class="text-danger">*</span></label>
+                                                                    <input type="text" name="building_code" class="form-control"
+                                                                           value="{{ $building->building_code }}" required maxlength="50">
+                                                                </div>
+                                                                <div class="col-md-8">
                                                                     <label class="form-label">Building / Level Name <span class="text-danger">*</span></label>
                                                                     <input type="text" name="name_or_level" class="form-control"
                                                                            value="{{ $building->name_or_level }}" required>
@@ -193,7 +204,7 @@
                                                                     <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
                                                                         @foreach(['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#a855f7'] as $c)
                                                                         <span class="color-swatch {{ $loop->first ? 'active' : '' }}"
-                                                                              style="background:{{ $c }}"
+                                                                              style="<?= e($c) ? 'background:'.e($c) : '' ?>"
                                                                               data-color="{{ $c }}"
                                                                               onclick="setZoneColor('edit{{ $building->id }}', this)"></span>
                                                                         @endforeach
@@ -309,7 +320,13 @@
                                 </select>
                                 @error('site_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             </div>
-                            <div class="col-12">
+                            <div class="col-md-4">
+                                <label class="form-label">Building Code <span class="text-danger">*</span></label>
+                                <input type="text" name="building_code" class="form-control @error('building_code') is-invalid @enderror"
+                                       value="{{ old('building_code') }}" required maxlength="50">
+                                @error('building_code')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+                            <div class="col-md-8">
                                 <label class="form-label">Building / Level Name <span class="text-danger">*</span></label>
                                 <input type="text" name="name_or_level" class="form-control @error('name_or_level') is-invalid @enderror"
                                        value="{{ old('name_or_level') }}" required placeholder="e.g. Level 1, Roof Top">
@@ -323,7 +340,7 @@
                                 <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
                                     @foreach(['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#a855f7'] as $c)
                                     <span class="color-swatch {{ $loop->first ? 'active' : '' }}"
-                                          style="background:{{ $c }}"
+                                          style="<?= e($c) ? 'background:'.e($c) : '' ?>"
                                           data-color="{{ $c }}"
                                           onclick="setZoneColor('create', this)"></span>
                                     @endforeach
@@ -371,11 +388,7 @@
     const DEFAULT_LAT = 27.4716, DEFAULT_LNG = 89.6386, DEFAULT_ZOOM = 19;
 
     // Site coordinates lookup
-    const siteCoords = {
-        @foreach($sites as $site)
-        '{{ $site->id }}': { lat: {{ $site->latitude ?? 'null' }}, lng: {{ $site->longitude ?? 'null' }} },
-        @endforeach
-    };
+    const siteCoords = {!! json_encode($sites->mapWithKeys(fn ($s) => [$s->id => ['lat' => $s->latitude ? (float)$s->latitude : null, 'lng' => $s->longitude ? (float)$s->longitude : null]])) !!};
 
     // ── Zone editor state per context key (create | editBUILDINGID) ──
     const zoneEditors = {};
@@ -598,11 +611,11 @@
     });
 
     // ── Re-open create modal on validation error ──────────────────────
-    @if($errors->has('site_id') || $errors->has('name_or_level'))
-    document.addEventListener('DOMContentLoaded', function () {
-        new bootstrap.Modal(document.getElementById('createBuildingModal')).show();
-    });
-    @endif
+    if (<?= ($errors->has('site_id') || $errors->has('name_or_level') || $errors->has('building_code')) ? 'true' : 'false' ?>) {
+        document.addEventListener('DOMContentLoaded', function () {
+            new bootstrap.Modal(document.getElementById('createBuildingModal')).show();
+        });
+    }
     </script>
     @endpush
 

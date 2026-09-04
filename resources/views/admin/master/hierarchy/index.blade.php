@@ -88,11 +88,13 @@
                     </span>
                     @endif
 
+                    @can('edit client assignments')
                     <button type="button"
                             class="btn btn-sm btn-outline-primary flex-shrink-0"
                             onclick="openAssignModal('{{ $client->id }}', '{{ addslashes($client->name) }}', '{{ $client->manager_id ?? '' }}')">
                         <i class="ri-user-settings-line me-1"></i>Assign
                     </button>
+                    @endcan
                 </div>
             </div>
 
