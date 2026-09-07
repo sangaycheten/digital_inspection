@@ -26,7 +26,7 @@ class RbacController extends Controller
     }
 
     // Permissions in these modules can only be held by system-administrator or manager
-    private const RESTRICTED_MODULES = ['Master Data', 'User & Role Management', 'Audit Log'];
+    private const RESTRICTED_MODULES = ['Manage Master', 'User & Role Management', 'Audit Log'];
 
     public function update(Request $request): RedirectResponse
     {

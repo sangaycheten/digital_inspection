@@ -14,6 +14,7 @@ return [
     'module_labels' => [
         'Settings'               => 'Settings',
         'User & Role Management' => 'User & Role Management',
+        'Manage Master'          => 'Manage Master',
         'Audit Log'              => 'Audit Log',
         'Jobs'                   => 'Jobs',
         'Asset Register'         => 'Asset Register',
@@ -27,16 +28,8 @@ return [
     ],
 
     'module_order' => [
-        'Users',
-        'Roles',
-        'Permissions',
-        'Clients',
-        'Sites',
-        'Buildings',
-        'Reference Data',
-        'Sections',
-        'Data Types',
-        'Client Assignments',
+        'User & Role Management',
+        'Manage Master',
         'Questionnaires',
         'Jobs',
         'Asset Register',
