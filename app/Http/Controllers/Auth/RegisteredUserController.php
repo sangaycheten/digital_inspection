@@ -48,7 +48,7 @@ class RegisteredUserController extends Controller
     {
         $roles   = Role::orderBy('name')->get();
         $clients = Client::where('status', 'active')->orderBy('name')->get();
-        $sites   = Site::with('client:id,name,custom_client_code')->orderBy('address')->get(['id', 'client_id', 'address']);
+        $sites   = Site::with('client:id,name,custom_client_code')->orderBy('name')->get(['id', 'client_id', 'name', 'address']);
 
         return view('admin.users.create', compact('roles', 'clients', 'sites'));
     }
@@ -56,6 +56,8 @@ class RegisteredUserController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $needsSites = in_array($request->input('role'), ['client-user', 'field-technician']);
+
+        $settingPassword = $request->boolean('set_password');
 
         $request->validate([
             'name'       => ['required', 'string', 'max:255'],
@@ -66,14 +68,23 @@ class RegisteredUserController extends Controller
             'site_ids.*' => $request->role === 'client-user' && $request->client_id
                                 ? [Rule::exists('sites', 'id')->where('client_id', $request->client_id)]
                                 : ['exists:sites,id'],
-            'password'   => ['required', 'confirmed', Rules\Password::defaults()],
+            'password'   => $settingPassword
+                                ? ['required', 'confirmed', Rules\Password::defaults()]
+                                : ['nullable'],
             'timezone'   => ['required', 'string', 'timezone:all'],
         ]);
+
+        // When no password is chosen, store a random unusable hash so the column stays NOT NULL.
+        // The account can only be accessed after admin sends credentials.
+        $passwordHash = $settingPassword
+            ? Hash::make($request->password)
+            : Hash::make(Str::random(40));
 
         $user = User::create([
             'name'              => $request->name,
             'email'             => $request->email,
-            'password'          => Hash::make($request->password),
+            'password'          => $passwordHash,
+            'has_password'      => $settingPassword,
             'email_verified_at' => Carbon::now(),
             'client_id'         => $request->role === 'client-user' ? $request->client_id : null,
             'timezone'          => $request->timezone,
@@ -89,7 +100,11 @@ class RegisteredUserController extends Controller
             $loggedSites = Site::whereIn('id', $request->site_ids ?? [])->pluck('address')->toArray();
         }
 
-        $logProps = ['name' => $user->name, 'email' => $user->email, 'role' => $request->role];
+        $logProps = [
+            'name'  => $user->name,
+            'email' => $user->email,
+            'role'  => $request->role,
+        ];
         if ($needsSites) {
             $logProps['sites'] = $loggedSites;
         }
@@ -112,7 +127,7 @@ class RegisteredUserController extends Controller
     {
         $roles       = Role::orderBy('name')->get();
         $clients     = Client::where('status', 'active')->orderBy('name')->get();
-        $sites       = Site::with('client:id,name,custom_client_code')->orderBy('address')->get(['id', 'client_id', 'address']);
+        $sites       = Site::with('client:id,name,custom_client_code')->orderBy('name')->get(['id', 'client_id', 'name', 'address']);
         $userSiteIds = $user->sites->pluck('id')->toArray();
 
         return view('admin.users.edit', compact('user', 'roles', 'clients', 'sites', 'userSiteIds'));
@@ -179,7 +194,7 @@ class RegisteredUserController extends Controller
         ]);
 
         if ($request->filled('password')) {
-            $user->update(['password' => Hash::make($request->password)]);
+            $user->update(['password' => Hash::make($request->password), 'has_password' => true]);
         }
 
         $user->syncRoles([$newRole]);
@@ -235,6 +250,7 @@ class RegisteredUserController extends Controller
         $temporaryPassword = Str::random(10);
         $user->update([
             'password'            => Hash::make($temporaryPassword),
+            'has_password'        => true,
             'credentials_sent_at' => now(),
         ]);
 

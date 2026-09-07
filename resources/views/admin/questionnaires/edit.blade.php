@@ -40,7 +40,7 @@
                         <i class="ri-list-check-2 me-2 text-primary"></i>Edit Sub-Questions
                     </h5>
                     <div class="text-muted fs-12 mt-1">
-                        {{ $questionnaire->name }} <span class="font-monospace">({{ $questionnaire->key }})</span>
+                        {{ $questionnaire->name }}
                     </div>
                 </div>
 
@@ -52,9 +52,9 @@
 
                         <div class="row g-3 mb-3" style="max-width:700px;">
                             <div class="col-md-6">
-                                <label class="form-label fw-medium">Asset Type</label>
-                                <select name="asset_type" id="sgAssetType" class="form-select" onchange="sgRegenerateAllAutoKeys()">
-                                    <option value="">— Not asset-specific —</option>
+                                <label class="form-label fw-medium">Asset Type <span class="text-danger">*</span></label>
+                                <select name="asset_type" id="sgAssetType" class="form-select" required onchange="sgRegenerateAllAutoKeys(); filterSgSections()">
+                                    <option value="">— Select Asset Type —</option>
                                     @foreach($assetTypes as $val => $label)
                                     <option value="{{ $val }}"
                                         {{ old('asset_type', $questionnaire->asset_type) === $val ? 'selected' : '' }}>
@@ -65,11 +65,11 @@
                                 <div class="form-text">Links this questionnaire to a specific asset type.</div>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label fw-medium">Section</label>
-                                <select name="section_id" id="sgSectionId" class="form-select">
-                                    <option value="">— No section —</option>
+                                <label class="form-label fw-medium">Section <span class="text-danger">*</span></label>
+                                <select name="section_id" id="sgSectionId" class="form-select" required>
+                                    <option value="">— Select Section —</option>
                                     @foreach($sections as $sec)
-                                    <option value="{{ $sec->id }}">{{ $sec->name }}</option>
+                                    <option value="{{ $sec->id }}" data-asset-type="{{ $sec->asset_type }}">{{ $sec->name }}</option>
                                     @endforeach
                                 </select>
                                 <div class="form-text">All sub-questions will belong to this section.</div>
@@ -118,9 +118,9 @@
 
                         {{-- Asset Type --}}
                         <div class="mb-3">
-                            <label class="form-label">Asset Type</label>
-                            <select name="asset_type" id="editAssetType" class="form-select" onchange="editRegenerateKey()">
-                                <option value="">— Not asset-specific —</option>
+                            <label class="form-label">Asset Type <span class="text-danger">*</span></label>
+                            <select name="asset_type" id="editAssetType" class="form-select" required onchange="editRegenerateKey(); filterEditSections()">
+                                <option value="">— Select Asset Type —</option>
                                 @foreach($assetTypes as $val => $label)
                                 <option value="{{ $val }}"
                                     {{ old('asset_type', $questionnaire->asset_type) === $val ? 'selected' : '' }}>
@@ -133,11 +133,12 @@
 
                         {{-- Section --}}
                         <div class="mb-3">
-                            <label class="form-label">Section</label>
-                            <select name="section_id" class="form-select">
-                                <option value="">— No section —</option>
+                            <label class="form-label">Section <span class="text-danger">*</span></label>
+                            <select name="section_id" id="editSectionId" class="form-select" required>
+                                <option value="">— Select Section —</option>
                                 @foreach($sections as $sec)
                                 <option value="{{ $sec->id }}"
+                                        data-asset-type="{{ $sec->asset_type }}"
                                     {{ old('section_id', $questionnaire->section_id) === $sec->id ? 'selected' : '' }}>
                                     {{ $sec->name }}
                                 </option>
@@ -187,13 +188,8 @@
                                    value="{{ old('name', $questionnaire->name) }}">
                         </div>
 
-                        {{-- Key --}}
-                        <div class="mb-3">
-                            <label class="form-label">Key <span class="text-danger">*</span></label>
-                            <input type="text" name="key" id="editKey" class="form-control font-monospace bg-light" required maxlength="100"
-                                   value="{{ old('key', $questionnaire->key) }}" readonly>
-                            <div class="form-text">Auto-generated from asset type and data type.</div>
-                        </div>
+                        {{-- Key (hidden — auto-generated, not shown to user) --}}
+                        <input type="hidden" name="key" id="editKey" value="{{ old('key', $questionnaire->key) }}">
 
                         {{-- Parent (sub_questionnaire type only) --}}
                         <div id="editParentWrap" class="mb-3" style="display:none;">
@@ -204,7 +200,7 @@
                                 @foreach($parentQuestionnaires as $pq)
                                 <option value="{{ $pq->id }}" data-type="{{ $pq->type }}"
                                     {{ old('parent_id', $questionnaire->parent_id) === $pq->id ? 'selected' : '' }}>
-                                    {{ $pq->name }} ({{ $pq->key }})
+                                    {{ $pq->name }}
                                 </option>
                                 @endforeach
                             </select>
@@ -276,12 +272,33 @@
 
     @push('scripts')
     <script>
-    const ALL_FIELD_TYPES  = @json($fieldTypesForJs);
-    const TYPE_OPTIONS_MAP = @json($typeOptions);
-    const TYPES_WITH_OPTS  = ['switch', 'option_list'];
+    const ALL_FIELD_TYPES  = {!! json_encode($fieldTypesForJs) !!};
+    const TYPE_OPTIONS_MAP = {!! json_encode($typeOptions) !!};
+    const TYPES_WITH_OPTS  = ['switch', 'three_tier_switch', 'option_list'];
     const SUB_Q_TYPE       = 'sub_questionnaire';
     const DATA_TYPES_URL   = "{{ route('admin.master.data-types.index') }}";
     const BASE_URL         = "{{ url('admin/questionnaires') }}";
+
+    function filterSectionSelect(assetTypeSelId, sectionSelId) {
+        const assetType = document.getElementById(assetTypeSelId)?.value || '';
+        const sectionSel = document.getElementById(sectionSelId);
+        if (!sectionSel) return;
+        Array.from(sectionSel.options).forEach(opt => {
+            if (!opt.value) return;
+            const matches = !assetType || opt.dataset.assetType === assetType;
+            opt.hidden = !matches;
+            opt.disabled = !matches;
+        });
+        const sel = sectionSel.options[sectionSel.selectedIndex];
+        if (sel && sel.hidden) sectionSel.value = '';
+    }
+    function filterSgSections()   { filterSectionSelect('sgAssetType',   'sgSectionId'); }
+    function filterEditSections()  { filterSectionSelect('editAssetType', 'editSectionId'); }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        filterSgSections();
+        filterEditSections();
+    });
 
     function populateFtSelect(sel, warn, type, selectedId) {
         sel.innerHTML = '<option value="">— Select option set —</option>';
@@ -321,7 +338,7 @@
 
     @if($subQuestionnaires->isNotEmpty())
     // ── Sub-group edit ────────────────────────────────────────────────────────
-    const TYPE_ABBR = { switch:'sw', text:'txt', number:'num', option_list:'opt', date:'dt', textarea:'ta', photo:'photo' };
+    const TYPE_ABBR = { switch:'sw', three_tier_switch:'tts', text:'txt', number:'num', option_list:'opt', date:'dt', textarea:'ta', photo:'photo' };
     function sgSlugify(str) { return (str||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,''); }
     function sgCollectUsedKeys(skipEl) {
         const keys = new Set();
@@ -354,26 +371,51 @@
         });
     }
 
-    const PARENT_IS_SWITCH  = @json($questionnaire->type === 'switch');
-    const PARENT_SW_OPTIONS = @json($questionnaire->fieldType->options ?? []);
+    const PARENT_IS_SWITCH     = {!! json_encode(in_array($questionnaire->type, ['switch', 'three_tier_switch'])) !!};
+    const PARENT_IS_THREE_TIER = {!! json_encode($questionnaire->type === 'three_tier_switch') !!};
+    const PARENT_SW_OPTIONS    = {!! json_encode($questionnaire->fieldType->options ?? []) !!};
+
+    const SG_COLORS = ['#6366f1','#f97316','#10b981','#3b82f6','#ec4899','#eab308','#8b5cf6','#14b8a6'];
+
+    function sgRenumber() {
+        document.querySelectorAll('#sgContainer .sg-row').forEach((row, i) => {
+            const color  = SG_COLORS[i % SG_COLORS.length];
+            row.style.borderLeft = `4px solid ${color}`;
+            const badge = row.querySelector('.sg-num-badge');
+            if (badge) { badge.textContent = `Q${i + 1}`; badge.style.background = color; }
+        });
+    }
+
+    function sgUpdatePreview(nameInput) {
+        const preview = nameInput.closest('.sg-row')?.querySelector('.sg-name-preview');
+        if (preview) preview.textContent = nameInput.value.trim() || 'New sub-question';
+    }
+
     function sgAddRow(prefill) {
         prefill = prefill || {};
         const container = document.getElementById('sgContainer');
+        const idx   = container.querySelectorAll('.sg-row').length;
+        const color = SG_COLORS[idx % SG_COLORS.length];
         const div = document.createElement('div');
-        div.className = 'sg-row border rounded p-2 mb-2 bg-white';
+        div.className = 'sg-row border rounded p-3 mb-3 bg-white';
+        div.style.borderLeft = `4px solid ${color}`;
         div.innerHTML = `
+            <div class="d-flex align-items-center gap-2 mb-2 pb-2 border-bottom">
+                <span class="sg-num-badge badge fs-11 px-2 py-1 flex-shrink-0"
+                      style="background:${color};color:#fff;min-width:32px;text-align:center">Q${idx + 1}</span>
+                <span class="sg-name-preview text-muted fs-12 fst-italic text-truncate">
+                    ${sgEsc(prefill.name || 'New sub-question')}
+                </span>
+            </div>
             <input type="hidden" name="sub_id[]" class="sg-id" value="${sgEsc(prefill.id || '')}">
             <div class="row g-2 mb-2">
-                <div class="col-md-7">
+                <div class="col-12">
                     <label class="form-label form-label-sm">Name <span class="text-danger">*</span></label>
                     <input type="text" name="name[]" class="form-control form-control-sm sg-name"
-                           maxlength="255" value="${sgEsc(prefill.name || '')}" placeholder="Sub-question name">
+                           maxlength="255" value="${sgEsc(prefill.name || '')}" placeholder="Sub-question name"
+                           oninput="sgUpdatePreview(this)">
                 </div>
-                <div class="col-md-5">
-                    <label class="form-label form-label-sm">Key <span class="text-danger">*</span></label>
-                    <input type="text" name="key[]" class="form-control form-control-sm font-monospace sg-key bg-light"
-                           maxlength="100" value="${sgEsc(prefill.key || '')}" placeholder="Auto-generated" readonly>
-                </div>
+                <input type="hidden" name="key[]" class="sg-key" maxlength="100" value="${sgEsc(prefill.key || '')}">
             </div>
             <div class="row g-2 mb-2">
                 <div class="col-md-5">
@@ -398,11 +440,16 @@
                 <small class="text-muted me-1">Options:</small><span class="sg-options-badges"></span>
             </div>
             <div class="sg-condition-wrap mb-2" style="display:none;">
-                <label class="form-label form-label-sm">Show when parent switch is <span class="text-danger">*</span></label>
+                <label class="form-label form-label-sm">Show when parent answer is <span class="text-danger">*</span></label>
                 <select name="condition[]" class="form-select form-select-sm sg-condition">
                     <option value="">— Select —</option>
-                    ${PARENT_SW_OPTIONS[0] ? `<option value="yes">${sgEsc(PARENT_SW_OPTIONS[0])}</option>` : ''}
-                    ${PARENT_SW_OPTIONS[1] ? `<option value="no">${sgEsc(PARENT_SW_OPTIONS[1])}</option>`  : ''}
+                    ${PARENT_IS_THREE_TIER
+                        ? ((PARENT_SW_OPTIONS[0] ? `<option value="opt1">${sgEsc(PARENT_SW_OPTIONS[0])}</option>` : '')
+                         + (PARENT_SW_OPTIONS[1] ? `<option value="opt2">${sgEsc(PARENT_SW_OPTIONS[1])}</option>` : '')
+                         + (PARENT_SW_OPTIONS[2] ? `<option value="opt3">${sgEsc(PARENT_SW_OPTIONS[2])}</option>` : ''))
+                        : ((PARENT_SW_OPTIONS[0] ? `<option value="yes">${sgEsc(PARENT_SW_OPTIONS[0])}</option>` : '')
+                         + (PARENT_SW_OPTIONS[1] ? `<option value="no">${sgEsc(PARENT_SW_OPTIONS[1])}</option>`  : ''))
+                    }
                 </select>
             </div>
             <div class="d-flex align-items-center gap-3 flex-wrap">
@@ -426,6 +473,7 @@
         container.appendChild(div);
         sgAttachKeyListener(div.querySelector('.sg-key'));
         sgUpdateRemoveBtns();
+        sgRenumber();
 
         const sgCondWrap = div.querySelector('.sg-condition-wrap');
         if (sgCondWrap) sgCondWrap.style.display = PARENT_IS_SWITCH ? '' : 'none';
@@ -446,7 +494,7 @@
     function sgRemoveRow(btn) {
         const row   = btn.closest('.sg-row');
         const subId = row.querySelector('.sg-id')?.value;
-        if (!subId) { row.remove(); sgUpdateRemoveBtns(); return; }
+        if (!subId) { row.remove(); sgUpdateRemoveBtns(); sgRenumber(); return; }
         if (!confirm('Delete this sub-question? This can be undone by an administrator.')) return;
         btn.disabled = true;
         const csrf = document.querySelector('#editSubGroupForm input[name="_token"]').value;
@@ -454,7 +502,7 @@
             method: 'DELETE',
             headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
         })
-        .then(r => { if (!r.ok) throw new Error(); row.remove(); sgUpdateRemoveBtns(); })
+        .then(r => { if (!r.ok) throw new Error(); row.remove(); sgUpdateRemoveBtns(); sgRenumber(); })
         .catch(() => { btn.disabled = false; alert('Failed to delete. Please try again.'); });
     }
 
@@ -516,17 +564,17 @@
     });
 
     document.addEventListener('DOMContentLoaded', function() {
-        @if($errors->any() && count(old('name', [])) > 0)
+        if (<?= ($errors->any() && count(old('name', [])) > 0) ? 'true' : 'false' ?>) {
         const od = {
-            subId:     @json(old('sub_id', [])),
-            name:      @json(old('name', [])),
-            key:       @json(old('key', [])),
-            type:      @json(old('type', [])),
-            ftId:      @json(old('field_type_id', [])),
-            condition: @json(old('condition', [])),
-            enabled:   @json(old('enabled', [])),
-            required:  @json(old('required', [])),
-            status:    @json(old('status', [])),
+            subId:     {!! json_encode(old('sub_id', [])) !!},
+            name:      {!! json_encode(old('name', [])) !!},
+            key:       {!! json_encode(old('key', [])) !!},
+            type:      {!! json_encode(old('type', [])) !!},
+            ftId:      {!! json_encode(old('field_type_id', [])) !!},
+            condition: {!! json_encode(old('condition', [])) !!},
+            enabled:   {!! json_encode(old('enabled', [])) !!},
+            required:  {!! json_encode(old('required', [])) !!},
+            status:    {!! json_encode(old('status', [])) !!},
         };
         od.name.forEach((n, i) => sgAddRow({
             id: od.subId[i] || '', name: n, key: od.key[i],
@@ -536,20 +584,20 @@
             required: od.required[i] !== undefined ? od.required[i] : '1',
             status:   od.status[i]   || 'active',
         }));
-        document.getElementById('sgSectionId').value = @json(old('section_id', ''));
-        @else
-        const subs = @json($subsForJs);
+        document.getElementById('sgSectionId').value = {!! json_encode(old('section_id', '')) !!};
+        } else {
+        const subs = {!! json_encode($subsForJs) !!};
         if (subs.length === 0) { sgAddRow(); }
         else {
             subs.forEach(sub => sgAddRow(sub));
             document.getElementById('sgSectionId').value = subs[0].section_id || '';
         }
-        @endif
+        }
     });
 
     @else
     // ── Single edit ───────────────────────────────────────────────────────────
-    const EDIT_TYPE_ABBR = { switch:'sw', text:'txt', number:'num', option_list:'opt', date:'dt', textarea:'ta', photo:'photo' };
+    const EDIT_TYPE_ABBR = { switch:'sw', three_tier_switch:'tts', text:'txt', number:'num', option_list:'opt', date:'dt', textarea:'ta', photo:'photo' };
     function editSlugify(str) { return (str||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,''); }
     function editBuildKey(dataType) {
         const assetVal = document.getElementById('editAssetType').value;
@@ -616,9 +664,9 @@
     }
 
     document.addEventListener('DOMContentLoaded', function() {
-        const currentType  = @json(old('type', $questionnaire->type));
-        const currentFtId  = @json(old('field_type_id', $questionnaire->field_type_id ?? ''));
-        const currentPId   = @json(old('parent_id', $questionnaire->parent_id ?? ''));
+        const currentType  = {!! json_encode(old('type', $questionnaire->type)) !!};
+        const currentFtId  = {!! json_encode(old('field_type_id', $questionnaire->field_type_id ?? '')) !!};
+        const currentPId   = {!! json_encode(old('parent_id', $questionnaire->parent_id ?? '')) !!};
         onEditTypeChange(currentType, currentFtId || null, currentPId || null);
     });
     @endif

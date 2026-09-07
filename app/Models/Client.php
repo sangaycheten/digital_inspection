@@ -26,4 +26,9 @@ class Client extends Model
     {
         return $this->belongsTo(User::class, 'manager_id');
     }
+
+    public function jobs(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Job::class);
+    }
 }

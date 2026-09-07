@@ -10,5 +10,5 @@ class Section extends Model
 {
     use SoftDeletes, HasUuids;
 
-    protected $fillable = ['name', 'key', 'description', 'status'];
+    protected $fillable = ['asset_type', 'name', 'key', 'description', 'status'];
 }

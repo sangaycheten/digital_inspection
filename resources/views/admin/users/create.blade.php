@@ -99,37 +99,68 @@
                             @error('site_ids')
                                 <div class="text-danger small mb-1">{{ $message }}</div>
                             @enderror
+                            <div id="siteSearch" style="display:none;" class="mb-2">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-white"><i class="ri-search-line text-muted"></i></span>
+                                    <input type="text" id="siteSearchInput" class="form-control border-start-0"
+                                           placeholder="Search by client or site name…"
+                                           oninput="filterSites(this.value)">
+                                    <button class="btn btn-outline-secondary" type="button"
+                                            onclick="filterSites(''); document.getElementById('siteSearchInput').value=''">
+                                        <i class="ri-close-line"></i>
+                                    </button>
+                                </div>
+                            </div>
                             <div id="siteCheckboxes"></div>
+                            <div id="siteNoResults" class="text-muted fs-12 py-2 text-center" style="display:none;">No sites match your search.</div>
                             <div class="form-text text-muted mt-1">Select one or more sites this user can access.</div>
                         </div>
 
-                        <div class="mb-3">
-                            <label for="password" class="form-label">Password <span class="text-danger">*</span></label>
-                            <div class="input-group">
-                                <input type="password" class="form-control @error('password') is-invalid @enderror"
-                                       id="password" name="password"
-                                       required placeholder="Enter password">
-                                <button class="btn btn-outline-secondary" type="button"
-                                        onclick="togglePwd('password', this)" tabindex="-1">
-                                    <i class="ri-eye-line"></i>
-                                </button>
-                                @error('password')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
+                        {{-- Password toggle --}}
+                        <div class="mb-3 border rounded p-3 bg-light">
+                            <div class="form-check form-switch d-flex align-items-center gap-2 mb-0">
+                                <input class="form-check-input" type="checkbox" role="switch"
+                                       id="set_password" name="set_password" value="1"
+                                       {{ old('set_password') ? 'checked' : '' }}
+                                       onchange="togglePasswordFields(this.checked)">
+                                <label class="form-check-label fw-semibold mb-0" for="set_password">
+                                    Set a password now
+                                </label>
                             </div>
-                            <div class="form-text">Min 8 characters with uppercase, lowercase, number, and symbol.</div>
+                            <div class="form-text mt-1">
+                                Leave off to create the account without a password — you can send login credentials later.
+                            </div>
                         </div>
 
-                        <div class="mb-4">
-                            <label for="password_confirmation" class="form-label">Confirm Password</label>
-                            <div class="input-group">
-                                <input type="password" class="form-control"
-                                       id="password_confirmation" name="password_confirmation"
-                                       required placeholder="Confirm password">
-                                <button class="btn btn-outline-secondary" type="button"
-                                        onclick="togglePwd('password_confirmation', this)" tabindex="-1">
-                                    <i class="ri-eye-line"></i>
-                                </button>
+                        <div id="passwordFields" @if(!old('set_password')) style="display:none" @endif>
+                            <div class="mb-3">
+                                <label for="password" class="form-label">Password <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <input type="password" class="form-control @error('password') is-invalid @enderror"
+                                           id="password" name="password"
+                                           placeholder="Enter password">
+                                    <button class="btn btn-outline-secondary" type="button"
+                                            onclick="togglePwd('password', this)" tabindex="-1">
+                                        <i class="ri-eye-line"></i>
+                                    </button>
+                                    @error('password')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+                                <div class="form-text">Min 8 characters with uppercase, lowercase, number, and symbol.</div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="password_confirmation" class="form-label">Confirm Password</label>
+                                <div class="input-group">
+                                    <input type="password" class="form-control"
+                                           id="password_confirmation" name="password_confirmation"
+                                           placeholder="Confirm password">
+                                    <button class="btn btn-outline-secondary" type="button"
+                                            onclick="togglePwd('password_confirmation', this)" tabindex="-1">
+                                        <i class="ri-eye-line"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -162,26 +193,54 @@
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
 <script>
-const allSitesList  = @json($sites);
-const sitesByClient = @json($sites->groupBy('client_id'));
-const oldSiteIds    = @json(old('site_ids', []));
+const allSitesList  = {!! json_encode($sites) !!};
+const sitesByClient = {!! json_encode($sites->groupBy('client_id')) !!};
+const oldSiteIds    = {!! json_encode(old('site_ids', [])) !!};
 
 function onRoleChange(role) {
     const clientField = document.getElementById('clientField');
     const clientSel   = document.getElementById('client_id');
+    const siteSearch  = document.getElementById('siteSearch');
     if (role === 'client-user') {
         clientField.style.display = 'block';
         clientSel.required = true;
+        siteSearch.style.display = 'none';
         loadClientSites(clientSel.value, oldSiteIds);
     } else if (role === 'field-technician') {
         clientField.style.display = 'none';
         clientSel.required = false;
+        siteSearch.style.display = 'block';
         loadAllSites(allSitesList, oldSiteIds);
     } else {
         clientField.style.display = 'none';
         document.getElementById('siteField').style.display = 'none';
+        siteSearch.style.display = 'none';
         clientSel.required = false;
     }
+}
+
+function filterSites(query) {
+    const q       = query.trim().toLowerCase();
+    const groups  = document.querySelectorAll('#siteCheckboxes > div');
+    let   visible = 0;
+
+    groups.forEach(group => {
+        const clientLabel = (group.querySelector('.fw-semibold')?.textContent ?? '').toLowerCase();
+        const rows        = group.querySelectorAll('.site-row');
+        let   groupVisible = 0;
+
+        rows.forEach(row => {
+            const siteName = (row.querySelector('.fw-medium')?.textContent ?? '').toLowerCase();
+            const matches  = !q || clientLabel.includes(q) || siteName.includes(q);
+            row.style.display = matches ? '' : 'none';
+            if (matches) groupVisible++;
+        });
+
+        group.style.display = groupVisible > 0 ? '' : 'none';
+        visible += groupVisible;
+    });
+
+    document.getElementById('siteNoResults').style.display = visible === 0 && q ? '' : 'none';
 }
 
 function loadClientSites(clientId, checkedIds) {
@@ -228,7 +287,10 @@ function buildGroup(key, clientName, sites, checkedIds) {
                     <input type="checkbox" class="form-check-input flex-shrink-0 site-${key}" name="site_ids[]"
                            id="site_${s.id}" value="${s.id}" ${chk} onchange="updateGroupHeader('${key}')">
                     <span class="text-muted small flex-shrink-0">${i + 1}.</span>
-                    <span class="small">${s.address}</span>
+                    <span class="small">
+                        <span class="fw-medium">${s.name}</span>
+                        <span class="d-block text-muted" style="font-size:11px">${s.address}</span>
+                    </span>
                 </label>`;
     }).join('');
     return `<div class="border rounded mb-2 overflow-hidden">${header}${rows}</div>`;
@@ -255,6 +317,16 @@ function selectAllSites(e, state) {
 
 function applyIndeterminate() {
     document.querySelectorAll('[data-indet="1"]').forEach(el => el.indeterminate = true);
+}
+
+function togglePasswordFields(show) {
+    const wrap = document.getElementById('passwordFields');
+    wrap.style.display = show ? '' : 'none';
+    // Clear values when hiding so they don't submit
+    if (!show) {
+        document.getElementById('password').value = '';
+        document.getElementById('password_confirmation').value = '';
+    }
 }
 
 function togglePwd(id, btn) {

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin\Master;
 
 use App\Http\Controllers\Controller;
 use App\Models\Client;
+use App\Models\Site;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -35,6 +36,11 @@ class ClientController extends Controller
             'status'               => ['required', 'in:active,inactive'],
             'manager_id'           => ['nullable', 'exists:users,id'],
             'logo'                 => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,svg', 'max:2048'],
+            'site_name'            => ['required', 'string', 'max:255'],
+            'site_timezone'        => ['required', 'string', 'timezone:all'],
+            'site_address'         => ['nullable', 'string', 'max:500'],
+            'site_latitude'        => ['nullable', 'numeric', 'between:-90,90'],
+            'site_longitude'       => ['nullable', 'numeric', 'between:-180,180'],
         ]);
 
         if ($request->hasFile('logo')) {
@@ -45,12 +51,25 @@ class ClientController extends Controller
 
         $client = Client::create($data);
 
+        $site = Site::create([
+            'client_id' => $client->id,
+            'name'      => $data['site_name'],
+            'timezone'  => $data['site_timezone'],
+            'address'   => $data['site_address']   ?? null,
+            'latitude'  => $data['site_latitude']  ?? null,
+            'longitude' => $data['site_longitude'] ?? null,
+        ]);
+
         activity()->useLog('master')->causedBy($request->user())
             ->performedOn($client)->event('created')
             ->log("Client created: {$client->name}");
 
+        activity()->useLog('master')->causedBy($request->user())
+            ->performedOn($site)->event('created')
+            ->log("Site created: {$site->name} (for client {$client->name})");
+
         return redirect()->route('admin.master.clients.index')
-            ->with('success', "Client \"{$client->name}\" created successfully.");
+            ->with('success', "Client \"{$client->name}\" created with site \"{$site->name}\" successfully.");
     }
 
     public function update(Request $request, Client $client): RedirectResponse

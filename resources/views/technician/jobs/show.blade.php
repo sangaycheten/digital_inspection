@@ -331,37 +331,32 @@
                     </div>
                     @endif
 
-                </div>
-            </div>
-            @endif
-
-            {{-- Register New Asset --}}
-            @if(!$job->isClosed())
-            <div class="card mb-3">
-                <div class="card-body d-flex align-items-center gap-3">
-                    <div class="flex-shrink-0 bg-secondary-subtle rounded p-2" style="line-height:1">
-                        <i class="ri-add-box-line text-secondary fs-20"></i>
-                    </div>
-                    <div class="flex-grow-1">
-                        <div class="fw-semibold fs-14">Register New Asset</div>
-                        <div class="text-muted fs-12">
-                            @if($scheduledDateOk)
-                                Found an asset on site not yet in the register? Add it here.
-                            @else
-                                Available from <strong>{{ $job->scheduled_date->format('d M Y') }}@if($job->scheduled_time) at {{ \Carbon\Carbon::parse($job->scheduled_time)->format('H:i') }}@endif</strong>.
-                            @endif
+                    {{-- New asset (secondary action, always inside Field Capture) --}}
+                    @if(!$job->isClosed())
+                    <hr class="my-3">
+                    <div class="d-flex align-items-start gap-3">
+                        <div class="flex-shrink-0 bg-secondary-subtle rounded p-2" style="line-height:1">
+                            <i class="ri-add-box-line text-secondary fs-20"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="fw-semibold fs-14 mb-1">Found a New Asset on Site?</div>
+                            <div class="text-muted fs-12 mb-2">Asset not yet in the register? Choose how you want to add it.</div>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button type="button" class="btn btn-sm btn-outline-secondary"
+                                        data-bs-toggle="modal" data-bs-target="#addAssetModal">
+                                    <i class="ri-add-line me-1"></i>Register Only
+                                    <span class="d-none d-sm-inline text-muted fw-normal fs-11 ms-1">— inspect later</span>
+                                </button>
+                                <a href="{{ route('technician.jobs.register-inspect', $job) }}"
+                                   class="btn btn-sm btn-outline-success">
+                                    <i class="ri-file-add-line me-1"></i>Register &amp; Inspect
+                                    <span class="d-none d-sm-inline text-muted fw-normal fs-11 ms-1">— one step</span>
+                                </a>
+                            </div>
                         </div>
                     </div>
-                    @if($scheduledDateOk)
-                    <button type="button" class="btn btn-sm btn-outline-secondary flex-shrink-0"
-                            data-bs-toggle="modal" data-bs-target="#addAssetModal">
-                        <i class="ri-add-line me-1"></i>Add Asset
-                    </button>
-                    @else
-                    <button type="button" class="btn btn-sm btn-outline-secondary flex-shrink-0" disabled>
-                        <i class="ri-calendar-event-line me-1"></i>Not Yet Available
-                    </button>
                     @endif
+
                 </div>
             </div>
             @endif
@@ -678,8 +673,8 @@
                     <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body" style="max-height:75vh;overflow-y:auto;">
-                    <div class="alert alert-light border fs-12 mb-3 py-2">
-                        <i class="ri-map-pin-line me-1"></i>
+                    <div class="bg-light border rounded px-3 py-2 fs-13 mb-3 text-dark">
+                        <i class="ri-map-pin-line me-1 text-primary"></i>
                         <strong>Site:</strong> {{ $job->site->name ?? $job->site->address }}
                         @if($job->client) &nbsp;·&nbsp; <strong>Client:</strong> {{ $job->client->name }} @endif
                     </div>
@@ -687,10 +682,13 @@
                     @if($job->buildings->isNotEmpty())
                     <div class="mb-3">
                         <label class="form-label fw-medium fs-13">Building <span class="text-danger">*</span></label>
-                        <select name="building_id" class="form-select @error('building_id') is-invalid @enderror" required>
+                        <select name="building_id" id="modalBuildingSelect"
+                                class="form-select @error('building_id') is-invalid @enderror" required
+                                onchange="onModalBuildingChange(this)">
                             <option value="" disabled {{ old('building_id') ? '' : 'selected' }}>— Select Building —</option>
                             @foreach($job->buildings as $b)
-                            <option value="{{ $b->id }}" {{ old('building_id') == $b->id ? 'selected' : (($job->buildings->count() === 1) ? 'selected' : '') }}>
+                            <option value="{{ $b->id }}" data-building-code="{{ $b->building_code }}"
+                                {{ old('building_id') == $b->id ? 'selected' : (($job->buildings->count() === 1) ? 'selected' : '') }}>
                                 {{ $b->name_or_level }}
                             </option>
                             @endforeach
@@ -701,53 +699,45 @@
 
                     @php $clientCode = $job->client->custom_client_code ?? ''; @endphp
 
-                    {{-- Single mode: asset code + group ID --}}
+                    {{-- Asset Type FIRST --}}
+                    <div class="mb-3">
+                        <label class="form-label fw-medium fs-13">Asset Type <span class="text-danger">*</span></label>
+                        <select name="asset_type" id="modalAssetTypeSelect"
+                                class="form-select @error('asset_type') is-invalid @enderror" required
+                                onchange="onModalAssetTypeChange(this)">
+                            <option value="">— Select Type —</option>
+                            @foreach($assetTypes as $value => $label)
+                            <option value="{{ $value }}" data-code="{{ $value }}"
+                                    {{ old('asset_type') == $value ? 'selected' : '' }}>
+                                {{ $label }}
+                            </option>
+                            @endforeach
+                        </select>
+                        @error('asset_type')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+
+                    {{-- Single mode: prefix badge + suffix input + group ID --}}
                     <div class="single-add">
                         <div class="mb-3">
                             <label class="form-label fw-medium fs-13">Asset Code <span class="text-danger">*</span></label>
                             <div class="input-group">
-                                @if($clientCode)
-                                <span class="input-group-text bg-primary-subtle text-primary fw-semibold fs-12"
-                                      style="min-width:52px; justify-content:center">{{ $clientCode }}-</span>
-                                @endif
-                                <input type="text" id="assetCodeSuffix"
+                                <span class="input-group-text bg-light text-muted font-monospace"
+                                      id="singleModalPrefixBadge" style="display:none"></span>
+                                <input type="text" name="asset_code" id="modalAssetCodeInput"
                                        class="form-control @error('asset_code') is-invalid @enderror"
-                                       placeholder="e.g. AP01"
-                                       value="{{ old('asset_code') ? (str_starts_with(old('asset_code'), $clientCode.'-') ? substr(old('asset_code'), strlen($clientCode)+1) : old('asset_code')) : '' }}"
-                                       autofocus>
-                                <input type="hidden" name="asset_code" id="assetCodeHidden" value="{{ old('asset_code') }}">
+                                       placeholder="e.g. 01"
+                                       value="{{ old('asset_code') }}" autofocus>
                             </div>
-                            @if($clientCode)
-                            <div class="form-text text-muted fs-11">Client code <strong>{{ $clientCode }}</strong> is prefixed automatically.</div>
-                            @endif
                             @error('asset_code')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-medium fs-13">Group ID</label>
-                            <input type="text" name="group_id"
-                                   class="form-control @error('group_id') is-invalid @enderror"
-                                   value="{{ old('group_id') }}" placeholder="Optional — links assets from same batch">
-                            @error('group_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
                     </div>
 
-                    {{-- Range mode: prefix + start + end + qty --}}
+                    {{-- Range mode: auto-prefix display + start + qty + end (readonly) --}}
                     <div class="range-add" style="display:none;">
                         <div class="mb-3">
-                            <label class="form-label fw-medium fs-13">Prefix <span class="text-danger">*</span></label>
-                            <div class="input-group">
-                                @if($clientCode)
-                                <span class="input-group-text bg-primary-subtle text-primary fw-semibold fs-12"
-                                      style="min-width:52px; justify-content:center">{{ $clientCode }}-</span>
-                                @endif
-                                <input type="text" id="addRangePrefixSuffix"
-                                       class="form-control @error('prefix') is-invalid @enderror"
-                                       placeholder="e.g. AP"
-                                       value="{{ old('prefix') ? (str_starts_with(old('prefix'), $clientCode.'-') ? substr(old('prefix'), strlen($clientCode)+1) : old('prefix')) : '' }}"
-                                       oninput="updateAddIndicator()">
-                            </div>
-                            <input type="hidden" name="prefix" id="addRangePrefixHidden" value="{{ old('prefix') }}">
-                            @error('prefix')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
+                            <label class="form-label fw-medium fs-13 text-muted">Auto-generated Prefix</label>
+                            <div id="rangeModalPrefixDisplay"
+                                 class="input-group-text bg-light text-muted font-monospace fs-13 d-inline-block px-3 py-2 rounded border">—</div>
                         </div>
                         <div class="row g-2 mb-2">
                             <div class="col-4">
@@ -755,40 +745,26 @@
                                 <input type="text" id="addRangeStart" name="range_start" inputmode="numeric"
                                        class="form-control @error('range_start') is-invalid @enderror"
                                        placeholder="01" value="{{ old('range_start') }}"
-                                       oninput="recalcAddRange()">
+                                       oninput="recalcModalEnd()">
                                 @error('range_start')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             </div>
                             <div class="col-4">
-                                <label class="form-label fw-medium fs-13">End <span class="text-danger">*</span></label>
-                                <input type="text" id="addRangeEnd" name="range_end" inputmode="numeric"
-                                       class="form-control @error('range_end') is-invalid @enderror"
-                                       placeholder="06" value="{{ old('range_end') }}"
-                                       oninput="recalcAddRange()">
-                                @error('range_end')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            </div>
-                            <div class="col-4">
-                                <label class="form-label fw-medium fs-13">Quantity</label>
+                                <label class="form-label fw-medium fs-13">Quantity <span class="text-danger">*</span></label>
                                 <input type="number" id="addRangeQty" name="quantity" min="1"
                                        class="form-control @error('quantity') is-invalid @enderror"
                                        placeholder="6" value="{{ old('quantity') }}"
-                                       oninput="validateAddRange()">
+                                       oninput="recalcModalEnd()">
                                 @error('quantity')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label fw-medium fs-13">End</label>
+                                <input type="text" id="addRangeEnd" name="range_end"
+                                       class="form-control bg-light @error('range_end') is-invalid @enderror"
+                                       placeholder="—" readonly value="{{ old('range_end') }}">
+                                @error('range_end')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             </div>
                         </div>
                         <div id="addRangeIndicator" class="fs-12 mb-2"></div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-medium fs-13">Asset Type <span class="text-danger">*</span></label>
-                        <select name="asset_type" class="form-select @error('asset_type') is-invalid @enderror" required>
-                            <option value="">— Select type —</option>
-                            @foreach($assetTypes as $value => $label)
-                            <option value="{{ $value }}" {{ old('asset_type') == $value ? 'selected' : '' }}>
-                                {{ $label }}
-                            </option>
-                            @endforeach
-                        </select>
-                        @error('asset_type')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
 
                     <div class="mb-3">
@@ -883,8 +859,8 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="alert alert-light border fs-12 mb-3 py-2">
-                        <i class="ri-map-pin-line me-1"></i>
+                    <div class="bg-light border rounded px-3 py-2 fs-13 mb-3 text-dark">
+                        <i class="ri-map-pin-line me-1 text-primary"></i>
                         <strong>Site:</strong> {{ $job->site->name ?? $job->site->address }}
                         @if($job->client) &nbsp;·&nbsp; <strong>Client:</strong> {{ $job->client->name }} @endif
                     </div>
@@ -1051,108 +1027,109 @@
 </script>
 <script>
     // Re-open modal if validation failed (errors present)
-    @if($errors->hasAny(['asset_code', 'asset_type', 'building_id', 'zone', 'group_id', 'serial_or_batch', 'rating', 'fixing_type', 'install_date', 'next_inspection_due_date', 'prefix', 'range_start', 'range_end', 'quantity']))
+    @if($errors->hasAny(['asset_code', 'asset_type', 'building_id', 'zone', 'group_id', 'serial_or_batch', 'rating', 'fixing_type', 'install_date', 'next_inspection_due_date', 'range_start', 'range_end', 'quantity']))
     document.addEventListener('DOMContentLoaded', function () {
         new bootstrap.Modal(document.getElementById('addAssetModal')).show();
     });
     @endif
 
-    // ── Single / Range toggle for Add Asset modal ─────────────────────
-    const addClientCode = '{{ $clientCode ?? '' }}';
+    // ── Register New Asset modal: prefix-aware ────────────────────────
+    const modalClientCode = @json($clientCode);
+    let currentModalBuildingCode  = '';
+    let currentModalAssetTypeCode = '';
+
+    function buildModalPrefix() {
+        const parts = [modalClientCode, currentModalBuildingCode].filter(Boolean);
+        const loc   = parts.length ? parts.join('-') + '-' : '';
+        return loc + (currentModalAssetTypeCode || '');
+    }
+
+    function updateModalPrefixBadges() {
+        const pfx   = buildModalPrefix();
+        const badge = document.getElementById('singleModalPrefixBadge');
+        if (badge) {
+            if (pfx) { badge.textContent = pfx; badge.style.display = ''; }
+            else      { badge.style.display = 'none'; }
+        }
+        const rangePfx = document.getElementById('rangeModalPrefixDisplay');
+        if (rangePfx) rangePfx.textContent = pfx || '—';
+    }
+
+    function onModalBuildingChange(sel) {
+        const opt = sel.options[sel.selectedIndex];
+        currentModalBuildingCode = opt?.dataset.buildingCode || '';
+        updateModalPrefixBadges();
+        recalcModalEnd();
+    }
+
+    function onModalAssetTypeChange(sel) {
+        const opt = sel.options[sel.selectedIndex];
+        currentModalAssetTypeCode = opt?.dataset.code || '';
+        updateModalPrefixBadges();
+        recalcModalEnd();
+    }
 
     function setAddMode(mode) {
         document.getElementById('addModeInput').value = mode;
         document.querySelectorAll('.single-add').forEach(el => el.style.display = mode === 'single' ? '' : 'none');
         document.querySelectorAll('.range-add').forEach(el => el.style.display = mode === 'range' ? '' : 'none');
         if (mode === 'range') {
-            validateAddRange();
+            const ac = document.getElementById('modalAssetCodeInput');
+            if (ac) ac.value = '';
+            recalcModalEnd();
         } else {
+            ['addRangeStart', 'addRangeEnd', 'addRangeQty'].forEach(function (id) {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
+            document.getElementById('addRangeIndicator').innerHTML = '';
             document.getElementById('addAssetSubmitBtn').disabled = false;
             document.getElementById('addAssetSubmitLabel').textContent = 'Add Asset';
         }
     }
 
-    function recalcAddRange() {
-        const startRaw = document.getElementById('addRangeStart').value.trim();
-        const endRaw   = document.getElementById('addRangeEnd').value.trim();
-        const start    = parseInt(startRaw, 10);
-        const end      = parseInt(endRaw, 10);
-        const qty      = document.getElementById('addRangeQty');
-        if (!isNaN(start) && !isNaN(end) && end >= start) {
-            qty.value = end - start + 1;
-            document.getElementById('addRangeEnd').classList.remove('is-invalid');
-        } else {
-            qty.value = '';
-        }
-        validateAddRange();
-    }
-
-    function updateAddIndicator() { validateAddRange(); }
-
-    function validateAddRange() {
-        const mode = document.getElementById('addModeInput').value;
-        if (mode !== 'range') return;
-
-        const prefixSuffix = document.getElementById('addRangePrefixSuffix')?.value.trim() ?? '';
-        const fullPrefix   = addClientCode ? addClientCode + '-' + prefixSuffix : prefixSuffix;
-        document.getElementById('addRangePrefixHidden').value = fullPrefix;
-
+    function recalcModalEnd() {
+        if (document.getElementById('addModeInput').value !== 'range') return;
         const startRaw  = document.getElementById('addRangeStart').value.trim();
-        const endRaw    = document.getElementById('addRangeEnd').value.trim();
-        const start     = parseInt(startRaw, 10);
-        const end       = parseInt(endRaw, 10);
         const qty       = parseInt(document.getElementById('addRangeQty').value, 10);
+        const start     = parseInt(startRaw, 10);
+        const endInput  = document.getElementById('addRangeEnd');
         const indicator = document.getElementById('addRangeIndicator');
         const btn       = document.getElementById('addAssetSubmitBtn');
         const label     = document.getElementById('addAssetSubmitLabel');
 
-        const endInput = document.getElementById('addRangeEnd');
+        if (isNaN(start) || isNaN(qty) || qty < 1) {
+            endInput.value = '';
+            indicator.innerHTML = '';
+            btn.disabled = true;
+            return;
+        }
 
-        if (isNaN(start) || isNaN(end)) {
-            indicator.innerHTML = '';
-            endInput.classList.remove('is-invalid');
-            btn.disabled = true;
-            return;
-        }
-        if (end < start) {
-            endInput.classList.add('is-invalid');
-            indicator.innerHTML = '<div class="alert alert-danger py-2 px-3 mb-0 fs-13"><i class="ri-error-warning-line me-1"></i>End number cannot be less than Start number.</div>';
-            btn.disabled = true;
-            return;
-        }
-        endInput.classList.remove('is-invalid');
-        if (isNaN(qty)) {
-            indicator.innerHTML = '';
-            btn.disabled = true;
-            return;
-        }
-        const expected = end - start + 1;
-        const padLen   = endRaw.length;
-        const pad      = n => String(n).padStart(padLen, '0');
-        if (qty !== expected) {
-            indicator.innerHTML = `<span class="text-danger"><i class="ri-error-warning-line me-1"></i>Quantity must be ${expected}</span>`;
-            btn.disabled = true;
-            return;
-        }
-        const first = fullPrefix + pad(start);
-        const last  = fullPrefix + pad(end);
-        indicator.innerHTML = `<span class="text-success"><i class="ri-check-line me-1"></i>${first} to ${last}</span>`;
-        label.textContent = `Add ${expected} Assets`;
+        const end    = start + qty - 1;
+        const padLen = Math.max(startRaw.length, String(end).length);
+        const pad    = n => String(n).padStart(padLen, '0');
+        endInput.value = pad(end);
+
+        const pfx   = buildModalPrefix();
+        const first = pfx + pad(start);
+        const last  = pfx + pad(end);
+        indicator.innerHTML = `<span class="text-success"><i class="ri-check-line me-1"></i>${first} → ${last}</span>`;
+        label.textContent   = `Add ${qty} Asset${qty > 1 ? 's' : ''}`;
         btn.disabled = false;
     }
 
-    // Sync prefix hidden on submit
-    document.querySelector('#addAssetModal form').addEventListener('submit', function () {
-        const mode = document.getElementById('addModeInput').value;
-        if (mode === 'range') {
-            const prefixSuffix = document.getElementById('addRangePrefixSuffix')?.value.trim() ?? '';
-            const fullPrefix   = addClientCode ? addClientCode + '-' + prefixSuffix : prefixSuffix;
-            document.getElementById('addRangePrefixHidden').value = fullPrefix;
+    document.addEventListener('DOMContentLoaded', function () {
+        const bSel = document.getElementById('modalBuildingSelect');
+        if (bSel) {
+            const bOpt = bSel.options[bSel.selectedIndex];
+            currentModalBuildingCode = bOpt?.dataset.buildingCode || '';
         }
+        const atSel = document.getElementById('modalAssetTypeSelect');
+        const atOpt = atSel?.options[atSel.selectedIndex];
+        currentModalAssetTypeCode = atOpt?.dataset.code || '';
+        updateModalPrefixBadges();
+        setAddMode(document.getElementById('addModeInput').value);
     });
-
-    // Init mode on page load (handles validation-error re-render)
-    setAddMode(document.getElementById('addModeInput').value);
 
     // ── Edit asset ───────────────────────────────────────────────────
     const editClientCode   = '{{ $job->client->custom_client_code ?? '' }}';
@@ -1254,23 +1231,6 @@
             });
         });
     });
-
-    // ── Asset code: prepend client code on submit ─────────────────────
-    const clientCode      = '{{ $job->client->custom_client_code ?? '' }}';
-    const suffixInput     = document.getElementById('assetCodeSuffix');
-    const hiddenCodeInput = document.getElementById('assetCodeHidden');
-
-    if (suffixInput && hiddenCodeInput) {
-        function syncAssetCode() {
-            const suffix = suffixInput.value.trim();
-            hiddenCodeInput.value = clientCode ? clientCode + '-' + suffix : suffix;
-        }
-        suffixInput.addEventListener('input', syncAssetCode);
-        syncAssetCode();
-
-        document.querySelector('#addAssetModal form')
-            .addEventListener('submit', syncAssetCode);
-    }
 
     const submitBtn = document.getElementById('submit-review-btn');
     if (submitBtn) {

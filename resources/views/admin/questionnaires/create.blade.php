@@ -44,9 +44,9 @@
 
                         <div class="row g-3 mb-3" style="max-width:700px;">
                             <div class="col-md-6">
-                                <label class="form-label fw-medium">Asset Type</label>
-                                <select id="createAssetType" class="form-select" onchange="regenerateAllAutoKeys()">
-                                    <option value="">— Not asset-specific —</option>
+                                <label class="form-label fw-medium">Asset Type <span class="text-danger">*</span></label>
+                                <select id="createAssetType" class="form-select" required onchange="regenerateAllAutoKeys(); filterSections()">
+                                    <option value="">— Select Asset Type —</option>
                                     @foreach($assetTypes as $val => $label)
                                     <option value="{{ $val }}" {{ old('asset_type') === $val ? 'selected' : '' }}>{{ $label }}</option>
                                     @endforeach
@@ -54,11 +54,13 @@
                                 <div class="form-text">Questions assigned to an asset type appear in the inspection form for that asset.</div>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label fw-medium">Section</label>
-                                <select id="createSectionId" class="form-select">
-                                    <option value="">— No section —</option>
+                                <label class="form-label fw-medium">Section <span class="text-danger">*</span></label>
+                                <select id="createSectionId" class="form-select" required>
+                                    <option value="">— Select Section —</option>
                                     @foreach($sections as $sec)
-                                    <option value="{{ $sec->id }}" {{ old('section_id.0') === $sec->id ? 'selected' : '' }}>
+                                    <option value="{{ $sec->id }}"
+                                            data-asset-type="{{ $sec->asset_type }}"
+                                            {{ old('section_id.0') === $sec->id ? 'selected' : '' }}>
                                         {{ $sec->name }}
                                     </option>
                                     @endforeach
@@ -92,9 +94,13 @@
     {{-- Row template --}}
     <template id="qRowTemplate">
         <div class="q-row border rounded p-3 mb-3 bg-white">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <span class="badge bg-primary-subtle text-primary q-row-num fs-12">Question #1</span>
-                <button type="button" class="btn btn-sm btn-outline-danger btn-remove-row"
+            <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                <div class="d-flex align-items-center gap-2 flex-grow-1" style="min-width:0">
+                    <span class="q-num-badge badge fs-11 px-2 py-1 flex-shrink-0"
+                          style="min-width:32px;text-align:center;background:#6366f1;color:#fff">Q1</span>
+                    <span class="q-name-preview text-muted fs-12 fst-italic text-truncate">New question</span>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-danger btn-remove-row ms-2"
                         onclick="removeQRow(this)" style="display:none;">
                     <i class="ri-delete-bin-line me-1"></i>Remove
                 </button>
@@ -120,16 +126,13 @@
             {{-- Standard section: name / key / options / toggles --}}
             <div class="q-standard-section">
                 <div class="row g-2 mb-2">
-                    <div class="col-md-7">
+                    <div class="col-12">
                         <label class="form-label form-label-sm">Question Name <span class="text-danger">*</span></label>
                         <input type="text" class="form-control form-control-sm q-name"
-                               maxlength="255" placeholder="e.g. Is the roof in good condition?">
+                               maxlength="255" placeholder="e.g. Is the roof in good condition?"
+                               oninput="qUpdatePreview(this)">
                     </div>
-                    <div class="col-md-5">
-                        <label class="form-label form-label-sm">Key <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control form-control-sm font-monospace q-key bg-light"
-                               maxlength="100" placeholder="Auto-generated" readonly>
-                    </div>
+                    <input type="hidden" class="q-key" maxlength="100">
                 </div>
                 <div class="q-options-preview mb-2 p-2 rounded border bg-light" style="display:none;">
                     <small class="text-muted me-1">Options:</small>
@@ -183,16 +186,13 @@
                         </div>
                     </div>
                     <div class="row g-2 mb-2">
-                        <div class="col-md-7">
+                        <div class="col-12">
                             <label class="form-label form-label-sm">Name <span class="text-danger">*</span></label>
                             <input type="text" class="form-control form-control-sm sq-parent-name"
-                                   maxlength="255" placeholder="e.g. Is the equipment operational?">
+                                   maxlength="255" placeholder="e.g. Is the equipment operational?"
+                                   oninput="qUpdatePreview(this)">
                         </div>
-                        <div class="col-md-5">
-                            <label class="form-label form-label-sm">Key <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control form-control-sm font-monospace sq-parent-key bg-light"
-                                   maxlength="100" placeholder="Auto-generated" readonly>
-                        </div>
+                        <input type="hidden" class="sq-parent-key" maxlength="100">
                     </div>
                     <div class="row g-2 align-items-center">
                         <div class="col-auto">
@@ -232,11 +232,28 @@
 
     @push('scripts')
     <script>
-    const ALL_FIELD_TYPES  = @json($fieldTypesForJs);
-    const TYPE_OPTIONS_MAP = @json($typeOptions);
-    const TYPES_WITH_OPTS  = ['switch', 'option_list'];
+    const ALL_FIELD_TYPES  = {!! json_encode($fieldTypesForJs) !!};
+    const TYPE_OPTIONS_MAP = {!! json_encode($typeOptions) !!};
+    const TYPES_WITH_OPTS  = ['switch', 'three_tier_switch', 'option_list'];
     const SUB_Q_TYPE       = 'sub_questionnaire';
     const DATA_TYPES_URL   = "{{ route('admin.master.data-types.index') }}";
+
+    function filterSections() {
+        const assetType = document.getElementById('createAssetType').value;
+        const sectionSel = document.getElementById('createSectionId');
+        const current = sectionSel.value;
+        Array.from(sectionSel.options).forEach(opt => {
+            if (!opt.value) return; // keep the "No section" option
+            const matches = !assetType || opt.dataset.assetType === assetType;
+            opt.hidden = !matches;
+            opt.disabled = !matches;
+        });
+        // Reset selection if currently selected option is now hidden
+        const selectedOpt = sectionSel.options[sectionSel.selectedIndex];
+        if (selectedOpt && selectedOpt.hidden) sectionSel.value = '';
+    }
+    // Run on page load to apply any pre-selected asset type (e.g. after validation failure)
+    document.addEventListener('DOMContentLoaded', filterSections);
 
     function buildTypeOptionsHtml() {
         let html = '<option value="">— Select —</option>';
@@ -258,13 +275,15 @@
 
     function populateFtSelect(sel, warn, type, selectedId) {
         sel.innerHTML = '<option value="">— Select option set —</option>';
-        const matching = ALL_FIELD_TYPES.filter(ft => ft.type === type);
+        const types = Array.isArray(type) ? type : [type];
+        const matching = ALL_FIELD_TYPES.filter(ft => types.includes(ft.type));
         if (matching.length === 0) { sel.disabled = true; warn.style.display = ''; return; }
         warn.style.display = 'none'; sel.disabled = false;
         matching.forEach(ft => {
             const o = document.createElement('option');
             o.value = ft.id; o.textContent = ft.name;
             o.dataset.options = JSON.stringify(ft.options);
+            o.dataset.ftType  = ft.type;
             if (ft.id === selectedId) o.selected = true;
             sel.appendChild(o);
         });
@@ -282,7 +301,7 @@
     }
 
     // ── Auto key generation ──────────────────────────────────────────────────
-    const TYPE_ABBR = { switch:'sw', text:'txt', number:'num', option_list:'opt',
+    const TYPE_ABBR = { switch:'sw', three_tier_switch:'tts', text:'txt', number:'num', option_list:'opt',
                         sub_questionnaire:'sub', date:'dt', textarea:'ta', photo:'photo' };
 
     function slugify(str) {
@@ -375,12 +394,39 @@
 
     function removeQRow(btn) { btn.closest('.q-row').remove(); updateRowNumbers(); }
 
+    const Q_COLORS = ['#6366f1','#f97316','#10b981','#3b82f6','#ec4899','#eab308','#8b5cf6','#14b8a6'];
+    const SQ_COLORS = ['#10b981','#6366f1','#f97316','#3b82f6','#ec4899','#eab308','#8b5cf6','#14b8a6'];
+
     function updateRowNumbers() {
         const rows = [...document.querySelectorAll('#qRowsContainer .q-row')];
         rows.forEach((row, i) => {
-            row.querySelector('.q-row-num').textContent = 'Question #' + (i + 1);
+            const color = Q_COLORS[i % Q_COLORS.length];
+            row.style.borderLeft = `4px solid ${color}`;
+            const badge = row.querySelector('.q-num-badge');
+            if (badge) { badge.textContent = `Q${i + 1}`; badge.style.background = color; }
             row.querySelector('.btn-remove-row').style.display = rows.length > 1 ? '' : 'none';
         });
+    }
+
+    function qUpdatePreview(nameInput) {
+        const preview = nameInput.closest('.q-row')?.querySelector('.q-name-preview');
+        if (preview) preview.textContent = nameInput.value.trim() || 'New question';
+    }
+
+    function renumberSqRows(qRow) {
+        const rows = [...qRow.querySelectorAll('.sq-container .sq-row')];
+        rows.forEach((row, i) => {
+            const color = SQ_COLORS[i % SQ_COLORS.length];
+            row.style.borderLeft = `4px solid ${color}`;
+            const badge = row.querySelector('.sq-num-badge');
+            if (badge) { badge.textContent = `S${i + 1}`; badge.style.background = color; }
+            row.querySelector('.sq-remove-btn').style.display = rows.length > 1 ? '' : 'none';
+        });
+    }
+
+    function sqUpdatePreview(nameInput) {
+        const preview = nameInput.closest('.sq-row')?.querySelector('.sq-name-preview');
+        if (preview) preview.textContent = nameInput.value.trim() || 'New sub-question';
     }
 
     function onQTypeChange(selectEl) {
@@ -405,7 +451,7 @@
             const parentFtSel  = row.querySelector('.sq-parent-ft-select');
             const parentFtWarn = row.querySelector('.sq-parent-no-configs');
             if (parentFtSel && parentFtSel.options.length <= 1) {
-                populateFtSelect(parentFtSel, parentFtWarn, 'switch', null);
+                populateFtSelect(parentFtSel, parentFtWarn, ['switch', 'three_tier_switch'], null);
             }
             const sqCont = row.querySelector('.sq-container');
             if (sqCont && sqCont.querySelectorAll('.sq-row').length === 0) addSubQRow(row);
@@ -434,18 +480,26 @@
         const qRow   = selectEl.closest('.q-row');
         const chosen = selectEl.options[selectEl.selectedIndex];
         const opts   = (chosen && chosen.value) ? JSON.parse(chosen.dataset.options || '[]') : [];
+        const ftType = chosen?.dataset.ftType || '';
         qRow.querySelectorAll('.sq-container .sq-row').forEach(sqRow => {
-            refreshConditionOptions(sqRow, opts);
+            refreshConditionOptions(sqRow, opts, ftType);
         });
     }
 
-    function refreshConditionOptions(sqRow, opts) {
+    function refreshConditionOptions(sqRow, opts, ftType) {
         const condSel = sqRow.querySelector('.sq-condition');
         if (!condSel) return;
         const prev = condSel.value;
+        const isThreeTier = ftType === 'three_tier_switch' || opts.length >= 3;
         condSel.innerHTML = '<option value="">— Select —</option>';
-        if (opts[0]) condSel.innerHTML += `<option value="yes">${sqEsc(opts[0])}</option>`;
-        if (opts[1]) condSel.innerHTML += `<option value="no">${sqEsc(opts[1])}</option>`;
+        if (isThreeTier) {
+            if (opts[0]) condSel.innerHTML += `<option value="opt1">${sqEsc(opts[0])}</option>`;
+            if (opts[1]) condSel.innerHTML += `<option value="opt2">${sqEsc(opts[1])}</option>`;
+            if (opts[2]) condSel.innerHTML += `<option value="opt3">${sqEsc(opts[2])}</option>`;
+        } else {
+            if (opts[0]) condSel.innerHTML += `<option value="yes">${sqEsc(opts[0])}</option>`;
+            if (opts[1]) condSel.innerHTML += `<option value="no">${sqEsc(opts[1])}</option>`;
+        }
         if (prev) condSel.value = prev;
     }
 
@@ -454,25 +508,30 @@
         prefill = prefill || {};
         const container = qRow.querySelector('.sq-container');
         // Get current parent switch options to populate condition dropdown
-        const parentFtSel = qRow.querySelector('.sq-parent-ft-select');
+        const parentFtSel  = qRow.querySelector('.sq-parent-ft-select');
         const parentChosen = parentFtSel?.options[parentFtSel.selectedIndex];
         const parentOpts   = (parentChosen && parentChosen.value)
                              ? JSON.parse(parentChosen.dataset.options || '[]') : [];
+        const parentFtType = parentChosen?.dataset.ftType || '';
 
         const div = document.createElement('div');
-        div.className = 'sq-row mb-2 py-2';
+        div.className = 'sq-row border rounded p-3 mb-2';
         div.innerHTML = `
+            <div class="d-flex align-items-center gap-2 mb-2 pb-2 border-bottom">
+                <span class="sq-num-badge badge fs-11 px-2 py-1 flex-shrink-0"
+                      style="min-width:32px;text-align:center;background:#10b981;color:#fff">S1</span>
+                <span class="sq-name-preview text-muted fs-12 fst-italic text-truncate">
+                    ${sqEsc(prefill.name || 'New sub-question')}
+                </span>
+            </div>
             <div class="row g-2 mb-2">
-                <div class="col-md-7">
+                <div class="col-12">
                     <label class="form-label form-label-sm">Name <span class="text-danger">*</span></label>
                     <input type="text" class="form-control form-control-sm sq-name"
-                           maxlength="255" value="${sqEsc(prefill.name || '')}" placeholder="Sub-question name">
+                           maxlength="255" value="${sqEsc(prefill.name || '')}" placeholder="Sub-question name"
+                           oninput="sqUpdatePreview(this)">
                 </div>
-                <div class="col-md-5">
-                    <label class="form-label form-label-sm">Key <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control form-control-sm font-monospace sq-key bg-light"
-                           maxlength="100" value="${sqEsc(prefill.key || '')}" placeholder="Auto-generated" readonly>
-                </div>
+                <input type="hidden" class="sq-key" maxlength="100" value="${sqEsc(prefill.key || '')}">
             </div>
             <div class="row g-2 mb-2">
                 <div class="col-md-5">
@@ -496,11 +555,20 @@
                 <small class="text-muted me-1">Options:</small><span class="sq-options-badges"></span>
             </div>
             <div class="sq-condition-wrap mb-2">
-                <label class="form-label form-label-sm">Show when parent switch is <span class="text-danger">*</span></label>
+                <label class="form-label form-label-sm">Show when parent answer is <span class="text-danger">*</span></label>
                 <select class="form-select form-select-sm sq-condition">
                     <option value="">— Select —</option>
-                    ${parentOpts[0] ? `<option value="yes" ${prefill.condition==='yes'?'selected':''}>${sqEsc(parentOpts[0])}</option>` : ''}
-                    ${parentOpts[1] ? `<option value="no"  ${prefill.condition==='no' ?'selected':''}>${sqEsc(parentOpts[1])}</option>` : ''}
+                    ${(() => {
+                        const isThreeTier = parentFtType === 'three_tier_switch' || parentOpts.length >= 3;
+                        if (isThreeTier) {
+                            return (parentOpts[0] ? `<option value="opt1" ${prefill.condition==='opt1'?'selected':''}>${sqEsc(parentOpts[0])}</option>` : '')
+                                 + (parentOpts[1] ? `<option value="opt2" ${prefill.condition==='opt2'?'selected':''}>${sqEsc(parentOpts[1])}</option>` : '')
+                                 + (parentOpts[2] ? `<option value="opt3" ${prefill.condition==='opt3'?'selected':''}>${sqEsc(parentOpts[2])}</option>` : '');
+                        } else {
+                            return (parentOpts[0] ? `<option value="yes" ${prefill.condition==='yes'?'selected':''}>${sqEsc(parentOpts[0])}</option>` : '')
+                                 + (parentOpts[1] ? `<option value="no"  ${prefill.condition==='no' ?'selected':''}>${sqEsc(parentOpts[1])}</option>` : '');
+                        }
+                    })()}
                 </select>
             </div>
             <div class="d-flex align-items-center gap-3 flex-wrap">
@@ -524,7 +592,7 @@
 
         container.appendChild(div);
         attachKeyListener(div.querySelector('.sq-key'));
-        updateSqRemoveBtns(qRow);
+        renumberSqRows(qRow);
 
         if (prefill.type) {
             const typeSel = div.querySelector('.sq-type-select');
@@ -541,12 +609,7 @@
         const sqRow = btn.closest('.sq-row');
         const qRow  = sqRow.closest('.q-row');
         sqRow.remove();
-        updateSqRemoveBtns(qRow);
-    }
-
-    function updateSqRemoveBtns(qRow) {
-        const rows = [...qRow.querySelectorAll('.sq-container .sq-row')];
-        rows.forEach(r => r.querySelector('.sq-remove-btn').style.display = rows.length > 1 ? '' : 'none');
+        renumberSqRows(qRow);
     }
 
     function onSqTypeChange(selectEl) {
@@ -593,14 +656,16 @@
             const type = row.querySelector('.q-type-select').value;
 
             if (type === SUB_Q_TYPE) {
-                const groupSeq   = 'g' + rowIdx;
-                const parentFtSel = row.querySelector('.sq-parent-ft-select');
+                const groupSeq     = 'g' + rowIdx;
+                const parentFtSel  = row.querySelector('.sq-parent-ft-select');
+                const parentFtOpt  = parentFtSel?.options[parentFtSel?.selectedIndex];
+                const parentActualType = parentFtOpt?.dataset.ftType || 'switch';
 
-                // Parent question — always Switch type
+                // Parent question — type comes from the selected option set
                 payload.push({
                     name:            row.querySelector('.sq-parent-name').value,
                     key:             row.querySelector('.sq-parent-key').value,
-                    type:            'switch',
+                    type:            parentActualType,
                     field_type_id:   parentFtSel?.value || '',
                     section_id:      sectionId,
                     parent_id:       '',
@@ -667,24 +732,73 @@
 
     // ── Init ────────────────────────────────────────────────────────────────
     document.addEventListener('DOMContentLoaded', function() {
-        @if($errors->any() && count(old('name', [])) > 0)
+        if (<?= ($errors->any() && count(old('name', [])) > 0) ? 'true' : 'false' ?>) {
         const od = {
-            name:     @json(old('name', [])),
-            key:      @json(old('key', [])),
-            type:     @json(old('type', [])),
-            ftId:     @json(old('field_type_id', [])),
-            enabled:  @json(old('enabled', [])),
-            required: @json(old('required', [])),
-            status:   @json(old('status', [])),
+            name:          {!! json_encode(old('name', [])) !!},
+            key:           {!! json_encode(old('key', [])) !!},
+            type:          {!! json_encode(old('type', [])) !!},
+            ftId:          {!! json_encode(old('field_type_id', [])) !!},
+            condition:     {!! json_encode(old('condition', [])) !!},
+            enabled:       {!! json_encode(old('enabled', [])) !!},
+            required:      {!! json_encode(old('required', [])) !!},
+            status:        {!! json_encode(old('status', [])) !!},
+            isGroupParent: {!! json_encode(old('is_group_parent', [])) !!},
+            groupSeq:      {!! json_encode(old('group_seq', [])) !!},
         };
-        od.name.forEach((n, i) => addQRow({
-            name: n, key: od.key[i], type: od.type[i],
-            field_type_id: od.ftId[i],
-            enabled: od.enabled[i], required: od.required[i], status: od.status[i],
-        }));
-        @else
+
+        // Group by group_seq
+        const groups = {};
+        od.name.forEach((n, i) => {
+            const seq  = od.groupSeq[i] || '';
+            const item = { name: n, key: od.key[i], type: od.type[i],
+                           field_type_id: od.ftId[i] || '', condition: od.condition[i] || '',
+                           enabled: od.enabled[i], required: od.required[i], status: od.status[i] };
+            if (!seq) { groups['__standalone_' + i] = { standalone: item }; return; }
+            if (!groups[seq]) groups[seq] = { parent: null, children: [] };
+            if ((od.isGroupParent[i] || '0') === '1') groups[seq].parent = item;
+            else groups[seq].children.push(item);
+        });
+
+        // Restore in order of first occurrence
+        const seen = new Set();
+        od.groupSeq.forEach((seq, i) => {
+            const key = seq || ('__standalone_' + i);
+            if (seen.has(key)) return;
+            seen.add(key);
+            const g = groups[key];
+            if (!g) return;
+
+            if (g.standalone) {
+                addQRow(g.standalone);
+                return;
+            }
+
+            // Sub-questionnaire group: add UI row as SUB_Q_TYPE, then restore children
+            addQRow({ type: SUB_Q_TYPE });
+            const liveRow = [...document.querySelectorAll('#qRowsContainer .q-row')].at(-1);
+            const par = g.parent || {};
+
+            if (par.name)   liveRow.querySelector('.sq-parent-name').value   = par.name;
+            if (par.key)    liveRow.querySelector('.sq-parent-key').value    = par.key;
+            if (par.status) liveRow.querySelector('.sq-parent-status').value = par.status;
+            liveRow.querySelector('.sq-parent-enabled-cb').checked  = par.enabled  !== '0';
+            liveRow.querySelector('.sq-parent-required-cb').checked = par.required !== '0';
+
+            if (par.field_type_id) {
+                const pfSel = liveRow.querySelector('.sq-parent-ft-select');
+                if (pfSel) { pfSel.value = par.field_type_id; onParentFtChange(pfSel); }
+            }
+
+            // Remove the auto-added blank sub-question, then restore saved ones
+            liveRow.querySelector('.sq-container').querySelectorAll('.sq-row').forEach(r => r.remove());
+            g.children.forEach(child => addSubQRow(liveRow, child));
+            if (liveRow.querySelector('.sq-container').querySelectorAll('.sq-row').length === 0)
+                addSubQRow(liveRow);
+            renumberSqRows(liveRow);
+        });
+        } else {
         addQRow();
-        @endif
+        }
     });
     </script>
     @endpush

@@ -93,6 +93,7 @@
                     <div class="col-md-8 d-flex align-items-center">
                         <span class="text-muted fs-13">
                             <span id="inspectedCount" class="fw-semibold text-primary">{{ $doneAssetIds->count() }}</span>
+                            <span id="totalDoneCount" class="d-none">{{ $doneAssetIds->count() }}</span>
                             of {{ $byType->flatten()->count() }} asset(s) recorded
                         </span>
                     </div>
@@ -129,7 +130,12 @@
                                 ->filter()->countBy();
                         @endphp
                         <div class="wizard-nav-item d-flex align-items-center gap-2 p-2 rounded mb-1"
-                             data-step="{{ $stepIdx }}" role="button" onclick="goToStep({{ $stepIdx }})">
+                             data-step="{{ $stepIdx }}"
+                             data-progress-step="{{ $stepIdx }}"
+                             data-total="{{ $typeAssets->count() }}"
+                             data-predone="{{ $preDone }}"
+                             data-type-label="{{ $assetTypes[$assetType] ?? $assetType }}"
+                             role="button" onclick="goToStep({{ $stepIdx }})">
                             <div class="step-circle" data-step="{{ $stepIdx }}">
                                 <span class="step-num">{{ $loop->iteration }}</span>
                                 <i class="ri-check-line step-check d-none"></i>
@@ -141,6 +147,12 @@
                                 <div class="fs-11 text-muted">
                                     <span class="nav-done-count" data-step="{{ $stepIdx }}">{{ $preDone }}</span>
                                     / {{ $typeAssets->count() }} recorded
+                                </div>
+                                @php $navPct = $typeAssets->count() ? round($preDone / $typeAssets->count() * 100) : 0; @endphp
+                                <div class="progress mt-1" style="height:4px">
+                                    <div class="progress-bar bg-success nav-progress-bar"
+                                         data-step="{{ $stepIdx }}"
+                                         style="width:{{ $navPct }}%" role="progressbar"></div>
                                 </div>
                                 @if($stepResults->isNotEmpty())
                                 <div class="d-flex flex-wrap gap-1 mt-1">
@@ -170,7 +182,7 @@
             </div>
 
             {{-- ── Center: Step panels ─────────────────────────────────────────── --}}
-            <div class="col-lg-6">
+            <div class="col-lg-9">
 
                 @foreach($byType as $assetType => $typeAssets)
                 @php
@@ -226,7 +238,7 @@
                                     </label>
                                     @if($bq->type === 'long_text')
                                         <textarea class="form-control form-control-sm bulk-q-input" data-qid="{{ $bq->id }}" rows="2"></textarea>
-                                    @elseif(in_array($bq->type, ['switch', 'option_list']) && $bqFt)
+                                    @elseif(in_array($bq->type, ['switch', 'three_tier_switch', 'option_list']) && $bqFt)
                                         <select class="form-select form-select-sm bulk-q-input" data-qid="{{ $bq->id }}">
                                             <option value="">— select —</option>
                                             @foreach($bqFt->options ?? [] as $opt)
@@ -235,6 +247,8 @@
                                         </select>
                                     @elseif($bq->type === 'numeric')
                                         <input type="number" step="any" class="form-control form-control-sm bulk-q-input" data-qid="{{ $bq->id }}">
+                                    @elseif($bq->type === 'date')
+                                        <input type="date" class="form-control form-control-sm bulk-q-input" data-qid="{{ $bq->id }}">
                                     @else
                                         <input type="text" class="form-control form-control-sm bulk-q-input" data-qid="{{ $bq->id }}">
                                     @endif
@@ -472,18 +486,27 @@
                                                 $inputName = "answers[{$asset->id}][{$q->id}]";
                                                 $oldVal    = old("answers.{$asset->id}.{$q->id}") ?? $existingAnswers->get($q->id)?->answer_value;
                                                 $qNum      = $loop->iteration;
+                                                $typeColors = ['text'=>'info','numeric'=>'primary','switch'=>'success','three_tier_switch'=>'warning','option_list'=>'info','long_text'=>'secondary','date'=>'danger','sub_questionnaire'=>'dark'];
+                                                $qColor = $typeColors[$q->type] ?? 'secondary';
                                             @endphp
-                                            <div class="border rounded p-2 bg-white">
-                                                <label class="form-label fs-12 fw-medium mb-1 d-flex align-items-center gap-1">
-                                                    <span class="badge bg-secondary-subtle text-secondary fw-semibold" style="min-width:20px">{{ $qNum }}</span>
-                                                    {{ $q->name }}
-                                                    @if($q->required)<span class="text-danger">*</span>@endif
+                                            <div class="rounded border border-start border-3 p-2 bg-white"
+                                                 style="border-left-color: var(--vz-{{ $qColor }}) !important;">
+                                                <label class="form-label fs-12 fw-medium mb-2 d-flex align-items-start gap-2">
+                                                    <span class="badge bg-primary text-white fw-bold flex-shrink-0 mt-0"
+                                                          style="min-width:22px;font-size:11px">{{ $qNum }}</span>
+                                                    <span class="flex-grow-1">
+                                                        {{ $q->name }}
+                                                        @if($q->required)<span class="text-danger ms-1">*</span>@endif
+                                                    </span>
+                                                    <span class="badge bg-{{ $qColor }}-subtle text-{{ $qColor }} fs-10 fw-normal flex-shrink-0">
+                                                        {{ \App\Enums\DataType::tryFrom($q->type)?->label() ?? $q->type }}
+                                                    </span>
                                                 </label>
                                                 @if($q->type === 'long_text')
                                                     <textarea name="{{ $inputName }}" class="form-control form-control-sm" rows="2"
                                                               @if($q->required) required @endif>{{ $oldVal }}</textarea>
-                                                @elseif(in_array($q->type, ['switch', 'option_list']) && $fieldType)
-                                                @php $hasConditionalSubs = $q->type === 'switch' && $q->subQuestionnaires->whereNotNull('condition')->isNotEmpty(); @endphp
+                                                @elseif(in_array($q->type, ['switch', 'three_tier_switch', 'option_list']) && $fieldType)
+                                                @php $hasConditionalSubs = in_array($q->type, ['switch', 'three_tier_switch']) && $q->subQuestionnaires->whereNotNull('condition')->isNotEmpty(); @endphp
                                                     <select name="{{ $inputName }}" class="form-select form-select-sm"
                                                             @if($hasConditionalSubs) data-asset="{{ $asset->id }}" data-qid="{{ $q->id }}" onchange="onSubTriggerChange(this)" @endif
                                                             @if($q->required) required @endif>
@@ -494,6 +517,11 @@
                                                     </select>
                                                 @elseif($q->type === 'numeric')
                                                     <input type="number" step="any" name="{{ $inputName }}"
+                                                           class="form-control form-control-sm"
+                                                           value="{{ $oldVal }}"
+                                                           @if($q->required) required @endif>
+                                                @elseif($q->type === 'date')
+                                                    <input type="date" name="{{ $inputName }}"
                                                            class="form-control form-control-sm"
                                                            value="{{ $oldVal }}"
                                                            @if($q->required) required @endif>
@@ -513,23 +541,27 @@
                                                     $sqCondKey = $sq->condition ?? '__none__';
                                                     $sqLetterCounters[$sqCondKey] = $sqLetterCounters[$sqCondKey] ?? 0;
                                                     $sqLetter  = chr(ord('a') + $sqLetterCounters[$sqCondKey]++);
-                                                    $sqVisible = !$sq->condition || $q->type !== 'switch' || ($oldVal && (
-                                                        ($sq->condition === 'yes' && $oldVal === ($fieldType->options[0] ?? null)) ||
-                                                        ($sq->condition === 'no'  && $oldVal === ($fieldType->options[1] ?? null))
+                                                    $sqVisible = !$sq->condition || !in_array($q->type, ['switch', 'three_tier_switch']) || ($oldVal && (
+                                                        ($sq->condition === 'yes'  && $oldVal === ($fieldType->options[0] ?? null)) ||
+                                                        ($sq->condition === 'no'   && $oldVal === ($fieldType->options[1] ?? null)) ||
+                                                        ($sq->condition === 'opt1' && $oldVal === ($fieldType->options[0] ?? null)) ||
+                                                        ($sq->condition === 'opt2' && $oldVal === ($fieldType->options[1] ?? null)) ||
+                                                        ($sq->condition === 'opt3' && $oldVal === ($fieldType->options[2] ?? null))
                                                     ));
                                                 @endphp
-                                                <div class="mt-2 ps-2 border-start border-2 border-secondary-subtle"
+                                                <div class="mt-2 ps-2 border-start border-2 border-warning"
                                                      @if($sq->condition) data-sq-parent="{{ $asset->id }}_{{ $q->id }}" data-sq-cond="{{ $sq->condition }}" @endif
                                                      @if(!$sqVisible) style="display:none;" @endif>
-                                                    <label class="form-label fs-11 text-muted mb-1 d-flex align-items-center gap-1">
-                                                        <span class="badge bg-light text-secondary border fw-semibold" style="min-width:18px;font-size:10px">{{ $sqLetter }}</span>
-                                                        {{ $sq->name }}
+                                                    <label class="form-label fs-11 mb-1 d-flex align-items-center gap-1">
+                                                        <span class="badge bg-warning text-dark fw-bold flex-shrink-0"
+                                                              style="min-width:18px;font-size:10px">{{ $sqLetter }}</span>
+                                                        <span class="text-dark">{{ $sq->name }}</span>
                                                         @if($sq->required)<span class="text-danger">*</span>@endif
                                                     </label>
                                                     @if($sq->type === 'long_text')
                                                         <textarea name="{{ $sqName }}" class="form-control form-control-sm" rows="1"
                                                                   @if($sq->required) required @endif>{{ $sqOldVal }}</textarea>
-                                                    @elseif(in_array($sq->type, ['switch', 'option_list']) && $sqFt)
+                                                    @elseif(in_array($sq->type, ['switch', 'three_tier_switch', 'option_list']) && $sqFt)
                                                         <select name="{{ $sqName }}" class="form-select form-select-sm"
                                                                 @if($sq->required) required @endif>
                                                             <option value="">— select —</option>
@@ -539,6 +571,11 @@
                                                         </select>
                                                     @elseif($sq->type === 'numeric')
                                                         <input type="number" step="any" name="{{ $sqName }}"
+                                                               class="form-control form-control-sm"
+                                                               value="{{ $sqOldVal }}"
+                                                               @if($sq->required) required @endif>
+                                                    @elseif($sq->type === 'date')
+                                                        <input type="date" name="{{ $sqName }}"
                                                                class="form-control form-control-sm"
                                                                value="{{ $sqOldVal }}"
                                                                @if($sq->required) required @endif>
@@ -646,7 +683,7 @@
                         <button type="button" class="btn btn-primary" id="nextBtn" onclick="changeStep(1)">
                             Next <i class="ri-arrow-right-line ms-1"></i>
                         </button>
-                        <button type="submit" class="btn btn-success d-none" id="saveBtn">
+                        <button type="submit" class="btn btn-success d-none" id="saveBtn" disabled>
                             <i class="ri-send-plane-line me-1"></i>Submit Inspection Records
                         </button>
                         @endif
@@ -657,53 +694,6 @@
                 </div>
             </div>
 
-            {{-- ── Right: Progress panel ───────────────────────────────────────── --}}
-            <div class="col-lg-3">
-                <div class="card">
-                    <div class="card-header">
-                        <h6 class="card-title mb-0">
-                            <i class="ri-bar-chart-line me-2 text-primary"></i>Inspection Progress
-                        </h6>
-                    </div>
-                    <div class="card-body">
-                        @php $grandTotal = $byType->flatten()->count(); @endphp
-
-                        @foreach($byType as $assetType => $typeAssets)
-                        @php
-                            $stepIdx = $loop->index;
-                            $preDone = $typeAssets->filter(fn($a) => $doneAssetIds->contains($a->id))->count();
-                            $total   = $typeAssets->count();
-                            $pct     = $total ? round($preDone / $total * 100) : 0;
-                        @endphp
-                        <div class="mb-3"
-                             data-progress-step="{{ $stepIdx }}"
-                             data-total="{{ $total }}"
-                             data-predone="{{ $preDone }}"
-                             data-type-label="{{ $assetTypes[$assetType] ?? $assetType }}">
-                            <div class="d-flex justify-content-between align-items-center fs-12 mb-1">
-                                <span class="text-muted text-truncate me-2" style="max-width:120px">
-                                    {{ $assetTypes[$assetType] ?? $assetType }}
-                                </span>
-                                <span class="fw-medium text-nowrap">
-                                    <span class="progress-done-count">{{ $preDone }}</span> / {{ $total }}
-                                </span>
-                            </div>
-                            <div class="progress" style="height:5px">
-                                <div class="progress-bar bg-success" style="width:{{ $pct }}%" role="progressbar"></div>
-                            </div>
-                        </div>
-                        @endforeach
-
-                        <hr class="my-2">
-                        <div class="d-flex justify-content-between fs-13">
-                            <span class="text-muted">Total</span>
-                            <span class="fw-semibold">
-                                <span id="totalDoneCount">{{ $doneAssetIds->count() }}</span> / {{ $grandTotal }}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
         </div>
         @endif
@@ -807,14 +797,17 @@
             </tr>`;
         });
 
-        const totalAssets = parseInt(document.getElementById('totalDoneCount')?.closest('[data-progress-step]')?.dataset.total ?? 0);
         html += '</tbody></table>';
 
-        if (grandNew === 0 && parseInt(document.getElementById('totalDoneCount').textContent) === 0) {
+        const alreadyDone = parseInt(document.getElementById('totalDoneCount').textContent);
+        const hasResults  = grandNew > 0 || alreadyDone > 0;
+
+        if (!hasResults) {
             html = '<div class="alert alert-warning fs-13"><i class="ri-alert-line me-2"></i>No results have been recorded yet. Go back and inspect assets before saving.</div>' + html;
         }
 
         document.getElementById('reviewSummary').innerHTML = html;
+        document.getElementById('saveBtn').disabled = !hasResults;
     }
 
     // ── Progress tracking ────────────────────────────────────────────────────
@@ -830,11 +823,12 @@
                 .filter(s => s.value !== '').length;
 
             const done = preDone + newFilled;
-            el.querySelector('.progress-done-count').textContent = done;
-            el.querySelector('.progress-bar').style.width = total ? `${done / total * 100}%` : '0%';
 
             const navCount = document.querySelector(`.nav-done-count[data-step="${stepIdx}"]`);
             if (navCount) navCount.textContent = done;
+
+            const navBar = document.querySelector(`.nav-progress-bar[data-step="${stepIdx}"]`);
+            if (navBar) navBar.style.width = total ? `${done / total * 100}%` : '0%';
 
             grandDone += done;
         });
@@ -870,12 +864,19 @@
         const key    = sel.dataset.asset + '_' + sel.dataset.qid;
         const val    = sel.value;
         const opts   = Array.from(sel.options).map(o => o.value).filter(v => v !== '');
-        const yesVal = opts[0] ?? null;
-        const noVal  = opts[1] ?? null;
+        const opt1   = opts[0] ?? null;
+        const opt2   = opts[1] ?? null;
+        const opt3   = opts[2] ?? null;
 
         document.querySelectorAll(`[data-sq-parent="${key}"]`).forEach(div => {
             const cond = div.dataset.sqCond;
-            const show = val && ((cond === 'yes' && val === yesVal) || (cond === 'no' && val === noVal));
+            const show = val && (
+                (cond === 'yes'  && val === opt1) ||
+                (cond === 'no'   && val === opt2) ||
+                (cond === 'opt1' && val === opt1) ||
+                (cond === 'opt2' && val === opt2) ||
+                (cond === 'opt3' && val === opt3)
+            );
             div.style.display = show ? '' : 'none';
             div.querySelectorAll('input, select, textarea').forEach(inp => {
                 if (show) {
@@ -975,9 +976,20 @@
 
     // ── Save Draft ───────────────────────────────────────────────────────────
     function saveDraft() {
+        const btn = document.getElementById('saveDraftBtn');
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ri-loader-4-line me-1"></i>Saving…'; }
         document.getElementById('saveDraftInput').value = '1';
         document.getElementById('inspectForm').submit();
     }
+
+    // ── Single-submission lock ────────────────────────────────────────────────
+    document.getElementById('inspectForm').addEventListener('submit', function () {
+        const isDraft = document.getElementById('saveDraftInput').value === '1';
+        if (!isDraft) {
+            const btn = document.getElementById('saveBtn');
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ri-loader-4-line me-1"></i>Submitting…'; }
+        }
+    });
 
     // ── Init ─────────────────────────────────────────────────────────────────
     document.addEventListener('DOMContentLoaded', function () {

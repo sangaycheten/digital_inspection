@@ -30,13 +30,15 @@ class BuildingController extends Controller
     {
         $data = $request->validate([
             'site_id'       => ['required', 'exists:sites,id'],
+            'building_code' => ['required', 'string', 'max:50'],
             'name_or_level' => [
                 'required', 'string', 'max:255',
                 Rule::unique('buildings', 'name_or_level')->where('site_id', $request->site_id),
             ],
             'roof_zones'    => ['nullable', 'string'],
         ], [
-            'name_or_level.unique' => 'A building with this name already exists at the selected site.',
+            'building_code.required' => 'The building code is required.',
+            'name_or_level.unique'   => 'A building with this name already exists at the selected site.',
         ]);
 
         $data['roof_zones'] = $this->parseRoofZones($data['roof_zones'] ?? null);
@@ -55,13 +57,15 @@ class BuildingController extends Controller
     {
         $data = $request->validate([
             'site_id'       => ['required', 'exists:sites,id'],
+            'building_code' => ['required', 'string', 'max:50'],
             'name_or_level' => [
                 'required', 'string', 'max:255',
                 Rule::unique('buildings', 'name_or_level')->where('site_id', $request->site_id)->ignore($building->id),
             ],
             'roof_zones'    => ['nullable', 'string'],
         ], [
-            'name_or_level.unique' => 'A building with this name already exists at the selected site.',
+            'building_code.required' => 'The building code is required.',
+            'name_or_level.unique'   => 'A building with this name already exists at the selected site.',
         ]);
 
         $data['roof_zones'] = $this->parseRoofZones($data['roof_zones'] ?? null);

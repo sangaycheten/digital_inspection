@@ -77,11 +77,11 @@ class AssetController extends Controller
             'asset_type.in'       => 'Invalid asset type selected.',
         ]);
 
-        $site = Site::with('client')->find($data['site_id']);
-        $clientCode = $site?->client?->custom_client_code ?? null;
-        if ($clientCode) {
-            $data['asset_code'] = $clientCode . '-' . $data['asset_code'];
-        }
+        $site         = Site::with('client')->find($data['site_id']);
+        $buildingCode = $data['building_id'] ? Building::find($data['building_id'])?->building_code : null;
+        $locParts     = array_filter([$site?->client?->custom_client_code, $buildingCode]);
+        $prefix       = ($locParts ? implode('-', $locParts) . '-' : '') . $data['asset_type'];
+        $data['asset_code'] = $prefix . $data['asset_code'];
 
         $exists = Asset::where('site_id', $data['site_id'])
             ->where('asset_code', $data['asset_code'])
@@ -114,7 +114,6 @@ class AssetController extends Controller
             'site_id'                  => ['required', 'exists:sites,id'],
             'building_id'              => ['nullable', 'exists:buildings,id'],
             'zone'                     => ['nullable', 'string', 'max:255'],
-            'prefix'                   => ['required', 'string', 'max:50'],
             'range_start'              => ['required', 'regex:/^\d+$/'],
             'range_end'                => ['required', 'regex:/^\d+$/', 'gte:range_start'],
             'quantity'                 => ['required', 'integer', 'min:1'],
@@ -137,19 +136,19 @@ class AssetController extends Controller
             ]);
         }
 
-        // Pad width is taken from the raw input (e.g. "06" → pad 2, "6" → pad 1)
-        $padLength  = strlen($request->input('range_end'));
-        $site       = Site::with('client')->find($data['site_id']);
-        $clientCode = $site?->client?->custom_client_code ?? null;
-        $prefix     = $clientCode ? $clientCode . '-' . $data['prefix'] : $data['prefix'];
-        $pad       = fn (int $n) => str_pad($n, $padLength, '0', STR_PAD_LEFT);
+        $padLength    = strlen($request->input('range_end'));
+        $site         = Site::with('client')->find($data['site_id']);
+        $buildingCode = $data['building_id'] ? Building::find($data['building_id'])?->building_code : null;
+        $locParts     = array_filter([$site?->client?->custom_client_code, $buildingCode]);
+        $prefix       = ($locParts ? implode('-', $locParts) . '-' : '') . $data['asset_type'];
+        $pad          = fn (int $n) => str_pad($n, $padLength, '0', STR_PAD_LEFT);
 
         // Verify every code is unique before inserting any
         for ($i = $start; $i <= $end; $i++) {
             $code = $prefix . $pad($i);
             if (Asset::where('site_id', $data['site_id'])->where('asset_code', $code)->exists()) {
                 return back()->withInput()->withErrors([
-                    'prefix' => "Asset code '{$code}' already exists for this site.",
+                    'range_start' => "Asset code '{$code}' already exists for this site.",
                 ]);
             }
         }

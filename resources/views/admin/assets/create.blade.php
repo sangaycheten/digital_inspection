@@ -89,72 +89,72 @@
                     <div class="card-body">
                         <div class="row g-3">
 
-                            {{-- Single mode: asset_code + group_id --}}
-                            <div class="col-md-4 single-only">
-                                <label class="form-label">Asset Code <span class="text-danger">*</span></label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-light text-muted" id="singleClientCodeBadge" style="display:none"></span>
-                                    <input type="text" name="asset_code"
-                                           class="form-control @error('asset_code') is-invalid @enderror"
-                                           value="{{ old('asset_code') }}" placeholder="e.g. AP01">
-                                </div>
-                                <div class="form-text">Must be unique within the selected site.</div>
-                                @error('asset_code')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            </div>
-{{-- Range mode: prefix / start / end / quantity / indicator --}}
-                            <div class="col-md-3 range-only">
-                                <label class="form-label">Prefix <span class="text-danger">*</span></label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-light text-muted" id="rangeClientCodeBadge" style="display:none"></span>
-                                    <input type="text" name="prefix" id="rangePrefix"
-                                           class="form-control @error('prefix') is-invalid @enderror"
-                                           value="{{ old('prefix') }}" placeholder="e.g. AP"
-                                           oninput="updateIndicator()">
-                                </div>
-                                @error('prefix')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            </div>
-                            <div class="col-md-2 range-only">
-                                <label class="form-label">Start <span class="text-danger">*</span></label>
-                                <input type="text" name="range_start" id="rangeStart" inputmode="numeric"
-                                       class="form-control @error('range_start') is-invalid @enderror"
-                                       value="{{ old('range_start') }}" placeholder="01"
-                                       oninput="recalcRange()">
-                                @error('range_start')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            </div>
-                            <div class="col-md-2 range-only">
-                                <label class="form-label">End <span class="text-danger">*</span></label>
-                                <input type="text" name="range_end" id="rangeEnd" inputmode="numeric"
-                                       class="form-control @error('range_end') is-invalid @enderror"
-                                       value="{{ old('range_end') }}" placeholder="06"
-                                       oninput="recalcRange()">
-                                @error('range_end')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            </div>
-                            <div class="col-md-2 range-only">
-                                <label class="form-label">Quantity <span class="text-danger">*</span></label>
-                                <input type="number" name="quantity" id="quantity"
-                                       class="form-control @error('quantity') is-invalid @enderror"
-                                       value="{{ old('quantity') }}" placeholder="6" min="1"
-                                       oninput="validateRange()">
-                                @error('quantity')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            </div>
-                            <div class="col-md-3 range-only d-flex align-items-end pb-1">
-                                <div id="rangeIndicator" class="fs-13 lh-sm"></div>
-                            </div>
-
-                            {{-- Asset Type (both modes) --}}
+                            {{-- Asset Type (both modes) — must come first so its code feeds the prefix --}}
                             <div class="col-md-4">
                                 <label class="form-label">Asset Type <span class="text-danger">*</span></label>
-                                <select name="asset_type"
-                                        class="form-select @error('asset_type') is-invalid @enderror" required>
+                                <select name="asset_type" id="assetTypeSelect"
+                                        class="form-select @error('asset_type') is-invalid @enderror" required
+                                        onchange="onAssetTypeChange()">
                                     <option value="">— Select Type —</option>
                                     @foreach($assetTypes as $val => $label)
-                                    <option value="{{ $val }}" {{ old('asset_type') == $val ? 'selected' : '' }}>
+                                    <option value="{{ $val }}" data-code="{{ $val }}"
+                                            {{ old('asset_type') == $val ? 'selected' : '' }}>
                                         {{ $label }}
                                     </option>
                                     @endforeach
                                 </select>
                                 @error('asset_type')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             </div>
+
+                            {{-- Single mode: asset_code --}}
+                            <div class="col-md-4 single-only">
+                                <label class="form-label">Asset Code <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light text-muted" id="singleClientCodeBadge" style="display:none"></span>
+                                    <input type="text" name="asset_code"
+                                           class="form-control @error('asset_code') is-invalid @enderror"
+                                           value="{{ old('asset_code') }}" placeholder="e.g. 01">
+                                </div>
+                                <div class="form-text">Must be unique within the selected site.</div>
+                                @error('asset_code')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+
+                            {{-- Range mode: auto-prefix display --}}
+                            <div class="col-12 range-only">
+                                <label class="form-label text-muted fs-12 mb-1">Auto-generated Prefix</label>
+                                <div id="rangePrefixDisplay" class="input-group-text bg-light text-muted font-monospace fs-13 d-inline-block px-3 py-2 rounded border">
+                                    —
+                                </div>
+                            </div>
+
+                            {{-- Range mode: start / end / quantity / indicator --}}
+                            <div class="col-md-2 range-only">
+                                <label class="form-label">Start <span class="text-danger">*</span></label>
+                                <input type="text" name="range_start" id="rangeStart" inputmode="numeric"
+                                       class="form-control @error('range_start') is-invalid @enderror"
+                                       value="{{ old('range_start') }}" placeholder="01"
+                                       oninput="recalcEnd()">
+                                @error('range_start')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+                            <div class="col-md-2 range-only">
+                                <label class="form-label">Quantity <span class="text-danger">*</span></label>
+                                <input type="number" name="quantity" id="quantity"
+                                       class="form-control @error('quantity') is-invalid @enderror"
+                                       value="{{ old('quantity') }}" placeholder="6" min="1"
+                                       oninput="recalcEnd()">
+                                @error('quantity')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+                            <div class="col-md-2 range-only">
+                                <label class="form-label">End</label>
+                                <input type="text" name="range_end" id="rangeEnd"
+                                       class="form-control bg-light @error('range_end') is-invalid @enderror"
+                                       value="{{ old('range_end') }}" placeholder="—" readonly>
+                                @error('range_end')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+                            <div class="col-md-3 range-only d-flex align-items-end pb-1">
+                                <div id="rangeIndicator" class="fs-13 lh-sm"></div>
+                            </div>
+
                         </div>
                     </div>
                 </div>
@@ -268,14 +268,17 @@
 
     @push('scripts')
     <script>
-    const buildingsBySite = @json(
-        \App\Models\Building::all(['id', 'site_id', 'name_or_level'])
+    @php
+        $buildingsBySiteJson = \App\Models\Building::all(['id', 'site_id', 'name_or_level', 'building_code'])
             ->groupBy('site_id')
-            ->map(fn ($b) => $b->values())
-    );
+            ->map(fn ($b) => $b->values());
+    @endphp
+    const buildingsBySite = {!! json_encode($buildingsBySiteJson) !!};
     const oldBuildingId = '{{ old('building_id') }}';
 
-    let currentClientCode = '';
+    let currentClientCode    = '';
+    let currentBuildingCode  = '';
+    let currentAssetTypeCode = '';
 
     function loadBuildings(siteId, selectedId) {
         const sel = document.getElementById('buildingSelect');
@@ -284,30 +287,57 @@
             const opt = document.createElement('option');
             opt.value = b.id;
             opt.textContent = b.name_or_level;
+            opt.dataset.buildingCode = b.building_code || '';
             if (b.id === selectedId) opt.selected = true;
             sel.appendChild(opt);
         });
+        currentBuildingCode = '';
+        updatePrefixBadges();
     }
 
-    function updateClientCodeBadges() {
-        const display = currentClientCode ? currentClientCode + '-' : '';
-        ['singleClientCodeBadge', 'rangeClientCodeBadge'].forEach(id => {
-            const el = document.getElementById(id);
-            if (!el) return;
-            if (display) {
-                el.textContent = display;
-                el.style.display = '';
-            } else {
-                el.style.display = 'none';
-            }
-        });
+    function buildAutoPrefix() {
+        // Location parts separated by dash, asset type code appended directly (no trailing dash)
+        const locParts = [currentClientCode, currentBuildingCode].filter(Boolean);
+        const locStr   = locParts.length ? locParts.join('-') + '-' : '';
+        return locStr + (currentAssetTypeCode || '');
+    }
+
+    function updatePrefixBadges() {
+        const display = buildAutoPrefix();
+
+        // Single mode badge
+        const badge = document.getElementById('singleClientCodeBadge');
+        if (badge) {
+            if (display) { badge.textContent = display; badge.style.display = ''; }
+            else { badge.style.display = 'none'; }
+        }
+
+        // Range mode prefix display
+        const rangePfx = document.getElementById('rangePrefixDisplay');
+        if (rangePfx) {
+            rangePfx.textContent = display || '—';
+        }
+    }
+
+    function onAssetTypeChange() {
+        const sel = document.getElementById('assetTypeSelect');
+        const opt = sel.options[sel.selectedIndex];
+        currentAssetTypeCode = opt.dataset.code || '';
+        updatePrefixBadges();
+        validateRange();
     }
 
     document.getElementById('siteSelect').addEventListener('change', function () {
         const opt = this.options[this.selectedIndex];
         currentClientCode = opt.dataset.clientCode || '';
         loadBuildings(this.value, null);
-        updateClientCodeBadges();
+        validateRange();
+    });
+
+    document.getElementById('buildingSelect').addEventListener('change', function () {
+        const opt = this.options[this.selectedIndex];
+        currentBuildingCode = opt.dataset.buildingCode || '';
+        updatePrefixBadges();
         validateRange();
     });
 
@@ -316,8 +346,17 @@
         const initOpt = document.getElementById('siteSelect').options[document.getElementById('siteSelect').selectedIndex];
         currentClientCode = initOpt.dataset.clientCode || '';
         loadBuildings(initSite, oldBuildingId);
-        updateClientCodeBadges();
+        if (oldBuildingId) {
+            const bSel = document.getElementById('buildingSelect');
+            const bOpt = bSel.options[bSel.selectedIndex];
+            if (bOpt) currentBuildingCode = bOpt.dataset.buildingCode || '';
+        }
     }
+    // Restore asset type code on load
+    const initAtSel = document.getElementById('assetTypeSelect');
+    const initAtOpt = initAtSel.options[initAtSel.selectedIndex];
+    if (initAtOpt) currentAssetTypeCode = initAtOpt.dataset.code || '';
+    updatePrefixBadges();
 
     // ── Mode toggle ──────────────────────────────────────────────────────────
 
@@ -332,87 +371,54 @@
         });
 
         if (mode === 'range') {
-            validateRange();
+            // Clear single-mode fields
+            const ac = document.querySelector('[name="asset_code"]');
+            if (ac) ac.value = '';
+            recalcEnd();
         } else {
+            // Clear range-mode fields and indicator
+            ['rangeStart', 'rangeEnd', 'quantity'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
+            document.getElementById('rangeIndicator').innerHTML = '';
             document.getElementById('submitBtn').disabled = false;
             document.getElementById('submitLabel').textContent = 'Create Asset';
         }
     }
 
-    // ── Range validation ─────────────────────────────────────────────────────
+    // ── Range: auto-calculate End from Start + Quantity ──────────────────────
 
-    function recalcRange() {
+    function recalcEnd() {
         const startRaw = document.getElementById('rangeStart').value.trim();
-        const endRaw   = document.getElementById('rangeEnd').value.trim();
-        const start    = parseInt(startRaw, 10);
-        const end      = parseInt(endRaw, 10);
-        const qtyField = document.getElementById('quantity');
-
-        if (!isNaN(start) && !isNaN(end) && end >= start) {
-            qtyField.value = end - start + 1;
-            document.getElementById('rangeEnd').classList.remove('is-invalid');
-        } else {
-            qtyField.value = '';
-        }
-        validateRange();
-    }
-
-    function updateIndicator() {
-        validateRange();
-    }
-
-    function validateRange() {
-        const mode = document.getElementById('modeInput').value;
-        if (mode !== 'range') return;
-
-        const startRaw = document.getElementById('rangeStart').value.trim();
-        const endRaw   = document.getElementById('rangeEnd').value.trim();
-        const start    = parseInt(startRaw, 10);
-        const end      = parseInt(endRaw, 10);
         const qty      = parseInt(document.getElementById('quantity').value, 10);
-        const prefix   = document.getElementById('rangePrefix').value.trim();
+        const start    = parseInt(startRaw, 10);
+        const endInput = document.getElementById('rangeEnd');
         const indicator = document.getElementById('rangeIndicator');
         const btn       = document.getElementById('submitBtn');
-        const endInput  = document.getElementById('rangeEnd');
 
-        if (isNaN(start) || isNaN(end)) {
-            indicator.innerHTML = '';
-            endInput.classList.remove('is-invalid');
-            btn.disabled = true;
-            return;
-        }
-
-        if (end < start) {
-            endInput.classList.add('is-invalid');
-            indicator.innerHTML = '<div class="alert alert-danger py-2 px-3 mb-0 fs-13"><i class="ri-error-warning-line me-1"></i>End number cannot be less than Start number.</div>';
-            btn.disabled = true;
-            return;
-        }
-
-        endInput.classList.remove('is-invalid');
-        if (isNaN(qty)) {
+        if (isNaN(start) || isNaN(qty) || qty < 1) {
+            endInput.value = '';
             indicator.innerHTML = '';
             btn.disabled = true;
             return;
         }
 
-        const expected = end - start + 1;
-        const padLen   = endRaw.length;
-        const pad      = n => String(n).padStart(padLen, '0');
+        const end    = start + qty - 1;
+        const padLen = Math.max(startRaw.length, String(end).length);
+        const pad    = n => String(n).padStart(padLen, '0');
+        endInput.value = pad(end);
 
-        if (qty !== expected) {
-            indicator.innerHTML = `<span class="text-danger"><i class="ri-error-warning-line"></i> Quantity must be ${expected}</span>`;
-            btn.disabled = true;
-            return;
-        }
-
-        const fullPrefix = currentClientCode ? currentClientCode + '-' + (prefix || '') : (prefix || '');
+        const fullPrefix = buildAutoPrefix();
         const first = fullPrefix + pad(start);
         const last  = fullPrefix + pad(end);
         indicator.innerHTML = `<span class="text-success"><i class="ri-check-line me-1"></i>${first} to ${last}</span>`;
-        document.getElementById('submitLabel').textContent = `Create ${expected} Assets`;
+        document.getElementById('submitLabel').textContent = `Create ${qty} Assets`;
         btn.disabled = false;
     }
+
+    function updateIndicator() { recalcEnd(); }
+    function validateRange()   { recalcEnd(); }
 
     // ── Init on page load (handles validation-error re-render) ───────────────
     setMode(document.getElementById('modeInput').value);

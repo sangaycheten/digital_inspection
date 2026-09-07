@@ -32,8 +32,9 @@ class FieldType extends Model
         return match($this->type) {
             'text'        => 'bg-primary-subtle text-primary',
             'numeric'     => 'bg-info-subtle text-info',
-            'switch'      => 'bg-success-subtle text-success',
-            'option_list' => 'bg-warning-subtle text-warning',
+            'switch'             => 'bg-success-subtle text-success',
+            'three_tier_switch'  => 'bg-success-subtle text-success',
+            'option_list'        => 'bg-warning-subtle text-warning',
             'long_text'   => 'bg-secondary-subtle text-secondary',
             default       => 'bg-light text-dark',
         };
@@ -41,6 +42,6 @@ class FieldType extends Model
 
     public function hasOptions(): bool
     {
-        return in_array($this->type, ['switch', 'option_list']);
+        return in_array($this->type, ['switch', 'three_tier_switch', 'option_list']);
     }
 }

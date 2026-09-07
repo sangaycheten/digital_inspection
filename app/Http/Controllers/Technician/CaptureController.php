@@ -17,6 +17,7 @@ use App\Notifications\InspectionSubmittedNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -99,7 +100,8 @@ class CaptureController extends Controller
             ->whereNull('parent_id')
             ->where('status', 'active')
             ->where('enabled', true)
-            ->with(['subQuestionnaires' => fn ($q) => $q->where('status', 'active')->where('enabled', true)->orderBy('created_at'), 'fieldType'])
+            ->with(['subQuestionnaires' => fn ($q) => $q->where('status', 'active')->where('enabled', true)->orderBy('sort_order')->orderBy('created_at'), 'fieldType'])
+            ->orderBy('sort_order')
             ->orderBy('created_at')
             ->get()
             ->groupBy('asset_type');
@@ -301,6 +303,200 @@ class CaptureController extends Controller
 
         return redirect()->route('technician.jobs.show', $job)
             ->with('success', "{$saved} inspection record(s) saved successfully.");
+    }
+
+    // ─── Register & Inspect (combined) ────────────────────────────────────────
+
+    public function registerInspectForm(Job $job): View
+    {
+        $this->authorizeJob($job);
+
+        $job->load(['site.client', 'client', 'buildings']);
+
+        $buildingIds = $job->assignedBuildingIdsForTechnician(Auth::id());
+        $buildings   = $buildingIds->isNotEmpty()
+            ? Building::whereIn('id', $buildingIds)->orderBy('name_or_level')->get()
+            : $job->site->buildings()->orderBy('name_or_level')->get();
+
+        $clientCode = $job->site?->client?->custom_client_code ?? '';
+
+        $assetTypes = MasterLookup::assetTypeMap();
+
+        $questionsByType = Questionnaire::whereIn('asset_type', array_keys($assetTypes))
+            ->whereNull('parent_id')
+            ->where('status', 'active')
+            ->where('enabled', true)
+            ->with(['subQuestionnaires' => fn ($q) => $q->where('status', 'active')->where('enabled', true)->orderBy('sort_order')->orderBy('created_at'), 'fieldType'])
+            ->orderBy('sort_order')
+            ->orderBy('created_at')
+            ->get()
+            ->groupBy('asset_type');
+
+        $registeredThisJob = Asset::where('created_from_job_id', $job->id)
+            ->with(['building', 'currentInspection'])
+            ->orderBy('asset_type')
+            ->orderBy('asset_code')
+            ->get();
+
+        return view('technician.capture.register-inspect', compact('job', 'buildings', 'clientCode', 'assetTypes', 'questionsByType', 'registeredThisJob'));
+    }
+
+    public function registerInspectStore(Request $request, Job $job): RedirectResponse
+    {
+        $this->authorizeJob($job);
+
+        $mode        = $request->input('mode', 'single');
+        $resultsRule = implode(',', InspectionRecord::RESULTS);
+
+        // Shared inspection + asset detail rules
+        $sharedRules = [
+            'asset_type'         => ['required', Rule::exists('master_lookups', 'value')->where('category', 'asset_type')],
+            'building_id'        => ['required', 'exists:buildings,id'],
+            'zone'               => ['nullable', 'string', 'max:255'],
+            'make'               => ['nullable', 'string', 'max:100'],
+            'model'              => ['nullable', 'string', 'max:100'],
+            'serial_or_batch'    => ['nullable', 'string', 'max:100'],
+            'rating'             => ['nullable', 'string', 'max:100'],
+            'install_date'       => ['nullable', 'date'],
+            'inspection_date'    => ['required', 'date'],
+            'result'             => ['required', "in:{$resultsRule}"],
+            'condition'          => ['nullable', 'string', 'max:1000'],
+            'defect_description' => ['nullable', 'string', 'max:1000'],
+            'reason_for_result'  => ['nullable', 'string', 'max:1000'],
+            'recommendation'     => ['nullable', 'string', 'max:1000'],
+            'required_action'    => ['nullable', 'string', 'max:1000'],
+            'photo'              => ['nullable', 'image', 'max:5120'],
+            'answers'            => ['nullable', 'array'],
+            'answers.*'          => ['nullable', 'string', 'max:2000'],
+        ];
+
+        $job->load(['site.client']);
+        $clientCode   = $job->site?->client?->custom_client_code ?? '';
+        $buildingCode = $request->filled('building_id')
+            ? (Building::find($request->input('building_id'))?->building_code ?? '')
+            : '';
+        $locParts  = array_filter([$clientCode, $buildingCode]);
+        $autoPrefix = ($locParts ? implode('-', $locParts) . '-' : '') . ($request->input('asset_type') ?? '');
+
+        if ($mode === 'range') {
+            $data = $request->validate(array_merge($sharedRules, [
+                'range_start' => ['required', 'numeric', 'min:0'],
+                'range_end'   => ['required', 'numeric', 'gte:range_start'],
+                'quantity'    => ['required', 'integer', 'min:1', 'max:200'],
+            ]));
+
+            $startRaw   = $request->input('range_start');
+            $endRaw     = $request->input('range_end');
+            $padLen     = strlen($endRaw);
+            $assetCodes = [];
+            for ($i = (int)$startRaw; $i <= (int)$endRaw; $i++) {
+                $assetCodes[] = $autoPrefix . str_pad($i, $padLen, '0', STR_PAD_LEFT);
+            }
+        } else {
+            $data = $request->validate(array_merge($sharedRules, [
+                'asset_code' => ['required', 'string', 'max:100'],
+            ]));
+            $assetCodes = [$autoPrefix . $data['asset_code']];
+        }
+
+        // Reject if any of the generated codes already exist at this site
+        $existing = Asset::where('site_id', $job->site_id)
+            ->whereIn('asset_code', $assetCodes)
+            ->pluck('asset_code')
+            ->toArray();
+
+        if (!empty($existing)) {
+            $list = implode(', ', $existing);
+            return back()->withInput()->withErrors([
+                'asset_code' => count($existing) === 1
+                    ? "Asset code {$list} already exists at this site."
+                    : "The following asset codes already exist at this site: {$list}.",
+            ]);
+        }
+
+        $photoPath = $request->hasFile('photo')
+            ? $request->file('photo')->store('inspection-photos', 'public')
+            : null;
+
+        $saved = 0;
+
+        DB::transaction(function () use ($data, $job, $assetCodes, $photoPath, &$saved) {
+            foreach ($assetCodes as $code) {
+                $asset = Asset::create([
+                    'site_id'             => $job->site_id,
+                    'building_id'         => $data['building_id'] ?? null,
+                    'zone'                => $data['zone'] ?? null,
+                    'asset_code'          => $code,
+                    'asset_type'          => $data['asset_type'],
+                    'make'                => $data['make'] ?? null,
+                    'model'               => $data['model'] ?? null,
+                    'serial_or_batch'     => $data['serial_or_batch'] ?? null,
+                    'rating'              => $data['rating'] ?? null,
+                    'current_status'      => 'not_inspected',
+                    'install_date'        => $data['install_date'] ?? null,
+                    'created_from_job_id' => $job->id,
+                ]);
+
+                $record = InspectionRecord::create([
+                    'asset_id'           => $asset->id,
+                    'job_id'             => $job->id,
+                    'inspection_date'    => $data['inspection_date'],
+                    'technician_id'      => Auth::id(),
+                    'result'             => $data['result'],
+                    'condition'          => $data['condition'] ?? null,
+                    'defect_description' => $data['defect_description'] ?? null,
+                    'reason_for_result'  => $data['reason_for_result'] ?? null,
+                    'recommendation'     => $data['recommendation'] ?? null,
+                    'required_action'    => $data['required_action'] ?? null,
+                    'photo_path'         => $photoPath,
+                    'document_status'    => 'submitted',
+                    'is_current'         => false,
+                    'previous_inspection_id' => null,
+                ]);
+
+                foreach ($data['answers'] ?? [] as $questionnaireId => $answerValue) {
+                    if ($answerValue === null || $answerValue === '') continue;
+                    InspectionAnswer::create([
+                        'inspection_record_id' => $record->id,
+                        'questionnaire_id'     => $questionnaireId,
+                        'answer_value'         => $answerValue,
+                        'created_at'           => now(),
+                    ]);
+                }
+
+                InstallationAsset::create([
+                    'job_id'   => $job->id,
+                    'asset_id' => $asset->id,
+                    'action'   => 'installed',
+                ]);
+
+                $saved++;
+            }
+
+            if (in_array($job->status, ['new', 'scheduled']) && $saved > 0) {
+                $job->update(['status' => 'in_progress']);
+            }
+        });
+
+        return redirect()->route('technician.jobs.show', $job)
+            ->with('success', "{$saved} asset(s) registered and inspected successfully.");
+    }
+
+    public function checkAssetCodes(Request $request, Job $job): JsonResponse
+    {
+        abort_if(!$job->technicians()->where('users.id', Auth::id())->exists(), 403);
+
+        $codes = array_slice((array) $request->input('codes', []), 0, 200);
+        if (empty($codes)) {
+            return response()->json(['existing' => []]);
+        }
+
+        $existing = Asset::where('site_id', $job->site_id)
+            ->whereIn('asset_code', $codes)
+            ->pluck('asset_code')
+            ->toArray();
+
+        return response()->json(['existing' => $existing]);
     }
 
     // ─── Installation / Rectification ──────────────────────────────────────────

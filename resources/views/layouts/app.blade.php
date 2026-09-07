@@ -10,6 +10,17 @@
     <!-- App favicon -->
     <link rel="shortcut icon" href="{{ asset('favicon.png') }}" type="image/png">
 
+    <!-- Persist dark mode & sidebar state before first paint -->
+    <script>
+    (function () {
+        var theme = localStorage.getItem('vs-theme');
+        if (theme === 'dark') {
+            document.documentElement.setAttribute('data-bs-theme', 'dark');
+            document.documentElement.setAttribute('data-sidebar', 'dark');
+        }
+    })();
+    </script>
+
     <!-- jsvectormap css -->
     <link href="{{ asset('assets/libs/jsvectormap/jsvectormap.min.css') }}" rel="stylesheet" type="text/css" />
 
@@ -373,6 +384,16 @@
     @stack('scripts')
 
     <script>
+    // Persist dark/light mode — reads AFTER the template has already toggled the attribute
+    document.querySelectorAll('.light-dark-mode').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            setTimeout(function () {
+                var theme = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'dark' : 'light';
+                localStorage.setItem('vs-theme', theme);
+            }, 50);
+        });
+    });
+
     document.addEventListener('submit', function (e) {
         const form = e.target;
         const btn  = form.querySelector('[type="submit"]');

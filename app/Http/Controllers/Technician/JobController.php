@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Technician;
 
 use App\Http\Controllers\Controller;
 use App\Models\Asset;
+use App\Models\Building;
 use App\Models\InspectionRecord;
 use App\Models\Job;
 use App\Models\MasterLookup;
@@ -88,6 +89,26 @@ class JobController extends Controller
         abort_if(!$job->technicians()->where('users.id', Auth::id())->exists(), 403);
         abort_if($job->isClosed(), 403, 'This job is closed.');
 
+        // Enforce all assets must be inspected before submission
+        $buildingIds  = $job->assignedBuildingIdsForTechnician(Auth::id());
+        $scopedAssets = Asset::where('site_id', $job->site_id)
+            ->when($buildingIds->isNotEmpty(), fn($q) => $q->whereIn('building_id', $buildingIds))
+            ->whereNotIn('current_status', ['removed', 'replaced'])
+            ->pluck('id');
+
+        $recordedIds = InspectionRecord::where('job_id', $job->id)
+            ->whereIn('document_status', ['draft', 'submitted'])
+            ->whereIn('asset_id', $scopedAssets)
+            ->distinct('asset_id')
+            ->pluck('asset_id');
+
+        $missing = $scopedAssets->diff($recordedIds)->count();
+        if ($missing > 0) {
+            return back()->withErrors([
+                'submit' => "{$missing} asset(s) have not been inspected yet. Complete all inspections before submitting for review.",
+            ]);
+        }
+
         $drafts = InspectionRecord::where('job_id', $job->id)
             ->where('document_status', 'draft')
             ->get();
@@ -150,6 +171,13 @@ class JobController extends Controller
             'next_inspection_due_date' => ['nullable', 'date'],
         ]);
 
+        $job->load(['site.client']);
+        $clientCode   = $job->site?->client?->custom_client_code ?? '';
+        $buildingCode = $data['building_id'] ? Building::find($data['building_id'])?->building_code ?? '' : '';
+        $locParts     = array_filter([$clientCode, $buildingCode]);
+        $prefix       = ($locParts ? implode('-', $locParts) . '-' : '') . $data['asset_type'];
+        $data['asset_code'] = $prefix . $data['asset_code'];
+
         $exists = Asset::where('site_id', $job->site_id)
             ->where('asset_code', $data['asset_code'])
             ->exists();
@@ -173,12 +201,11 @@ class JobController extends Controller
     private function storeRangeAsset(Request $request, Job $job): RedirectResponse
     {
         $data = $request->validate([
-            'prefix'                   => ['required', 'string', 'max:100'],
+            'asset_type'               => ['required', Rule::exists('master_lookups', 'value')->where('category', 'asset_type')],
+            'building_id'              => [$job->buildings()->exists() ? 'required' : 'nullable', 'exists:buildings,id'],
             'range_start'              => ['required', 'regex:/^\d+$/'],
             'range_end'                => ['required', 'regex:/^\d+$/', 'gte:range_start'],
             'quantity'                 => ['required', 'integer', 'min:1'],
-            'asset_type'               => ['required', Rule::exists('master_lookups', 'value')->where('category', 'asset_type')],
-            'building_id'              => [$job->buildings()->exists() ? 'required' : 'nullable', 'exists:buildings,id'],
             'zone'                     => ['nullable', 'string', 'max:100'],
             'make'                     => ['nullable', 'string', 'max:255'],
             'model'                    => ['nullable', 'string', 'max:255'],
@@ -188,25 +215,23 @@ class JobController extends Controller
             'next_inspection_due_date' => ['nullable', 'date'],
         ]);
 
+        $job->load(['site.client']);
+        $clientCode   = $job->site?->client?->custom_client_code ?? '';
+        $buildingCode = $data['building_id'] ? Building::find($data['building_id'])?->building_code ?? '' : '';
+        $locParts     = array_filter([$clientCode, $buildingCode]);
+        $prefix       = ($locParts ? implode('-', $locParts) . '-' : '') . $data['asset_type'];
+
         $start       = (int) $data['range_start'];
         $end         = (int) $data['range_end'];
         $rangeLength = $end - $start + 1;
-
-        if ((int) $data['quantity'] !== $rangeLength) {
-            return back()->withInput()->withErrors([
-                'quantity' => "Quantity must equal end − start + 1 = {$rangeLength}.",
-            ]);
-        }
-
-        $padLength = strlen($request->input('range_end'));
-        $prefix    = $data['prefix'];
-        $pad       = fn (int $n) => str_pad($n, $padLength, '0', STR_PAD_LEFT);
+        $padLength   = strlen($request->input('range_end'));
+        $pad         = fn (int $n) => str_pad($n, $padLength, '0', STR_PAD_LEFT);
 
         for ($i = $start; $i <= $end; $i++) {
             $code = $prefix . $pad($i);
             if (Asset::where('site_id', $job->site_id)->where('asset_code', $code)->exists()) {
                 return back()->withInput()->withErrors([
-                    'prefix' => "Asset code '{$code}' already exists at this site.",
+                    'range_start' => "Asset code '{$code}' already exists at this site.",
                 ]);
             }
         }
