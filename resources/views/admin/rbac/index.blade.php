@@ -134,7 +134,13 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @php $restrictedModules = ['Manage Master', 'User & Role Management', 'Audit Log']; @endphp
+                                @php
+                    $restrictedModules = [
+                        'Users', 'Roles', 'Permissions',
+                        'Clients', 'Sites', 'Buildings', 'Reference Data', 'Sections', 'Data Types', 'Client Assignments',
+                        'Audit Log',
+                    ];
+                @endphp
                                 @foreach($permissionGroups as $module => $permissions)
                                 <tr>
                                     <td class="module-header" colspan="{{ $roles->count() + 1 }}">

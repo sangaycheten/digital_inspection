@@ -10,26 +10,64 @@ return [
     | The label is derived from the first permission slug in each module,
     | so adding new permissions to a module requires no code change here.
     */
-    // Maps DB module name → sidebar-matching display label for RBAC & Permissions pages
+    // Maps DB module name → display label (identity mappings can be omitted but listed for clarity)
     'module_labels' => [
-        'Settings'               => 'Settings',
-        'User & Role Management' => 'User & Role Management',
-        'Manage Master'          => 'Manage Master',
-        'Audit Log'              => 'Audit Log',
-        'Jobs'                   => 'Jobs',
-        'Asset Register'         => 'Asset Register',
-        'Documents'              => 'Documents',
-        'Client Portal'          => 'Client Portal',
-        'Inspections'            => 'Inspections',
-        'Re-Inspections'         => 'Re-Inspections',
+        'Users'                        => 'Users',
+        'Roles'                        => 'Roles',
+        'Permissions'                  => 'Permissions',
+        'Clients'                      => 'Clients',
+        'Sites'                        => 'Sites',
+        'Buildings'                    => 'Buildings',
+        'Reference Data'               => 'Reference Data',
+        'Sections'                     => 'Sections',
+        'Data Types'                   => 'Data Types',
+        'Client Assignments'           => 'Client Assignments',
+        'Questionnaires'               => 'Questionnaires',
+        'Jobs'                         => 'Jobs',
+        'Asset Register'               => 'Asset Register',
+        'Documents'                    => 'Documents',
+        'Client Portal'                => 'Client Portal',
+        'Inspections'                  => 'Inspections',
+        'Re-Inspections'               => 'Re-Inspections',
         'Installation & Rectification' => 'Installation & Rectification',
-        'Export'                 => 'Export',
-        'Reports'                => 'Reports',
+        'Audit Log'                    => 'Audit Log',
+        'Export'                       => 'Export',
     ],
 
-    'module_order' => [
+    // Maps sub-module → parent group name for two-level display in Permissions page
+    'parent_groups' => [
+        'Users'              => 'User & Role Management',
+        'Roles'              => 'User & Role Management',
+        'Permissions'        => 'User & Role Management',
+        'Clients'            => 'Manage Master',
+        'Sites'              => 'Manage Master',
+        'Buildings'          => 'Manage Master',
+        'Reference Data'     => 'Manage Master',
+        'Sections'           => 'Manage Master',
+        'Data Types'         => 'Manage Master',
+        'Client Assignments' => 'Manage Master',
+    ],
+
+    // Display order for parent group headers (Permissions page top-level sections)
+    'parent_group_order' => [
         'User & Role Management',
         'Manage Master',
+        'Questionnaires',
+        'Jobs',
+        'Asset Register',
+        'Documents',
+        'Inspections',
+        'Re-Inspections',
+        'Installation & Rectification',
+        'Client Portal',
+        'Audit Log',
+        'Export',
+    ],
+
+    // Sort order for sub-modules within their parent group
+    'module_order' => [
+        'Users', 'Roles', 'Permissions',
+        'Clients', 'Sites', 'Buildings', 'Reference Data', 'Sections', 'Data Types', 'Client Assignments',
         'Questionnaires',
         'Jobs',
         'Asset Register',

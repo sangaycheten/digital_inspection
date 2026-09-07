@@ -84,15 +84,31 @@
     <div class="row">
         <div class="col-12">
             <div class="card">
+                @php
+                    $parentGroupsMap   = config('navigation.parent_groups', []);
+                    $parentGroupOrder  = config('navigation.parent_group_order', []);
+
+                    // Build: parentGroup → [subModule → collection]
+                    $topLevel = [];
+                    foreach ($permissionGroups as $module => $perms) {
+                        $parent = $parentGroupsMap[$module] ?? $module;
+                        $topLevel[$parent][$module] = $perms;
+                    }
+                    uksort($topLevel, function ($a, $b) use ($parentGroupOrder) {
+                        $pa = ($p = array_search($a, $parentGroupOrder)) !== false ? $p : 999;
+                        $pb = ($p = array_search($b, $parentGroupOrder)) !== false ? $p : 999;
+                        return $pa <=> $pb;
+                    });
+                @endphp
                 <div class="card-header d-flex align-items-center gap-2">
                     <h5 class="card-title mb-0 flex-grow-1">
                         <i class="ri-key-2-line me-2 text-primary"></i>All Permissions
                     </h5>
-                    <!-- Module filter -->
-                    <select id="moduleFilter" class="form-select form-select-sm" style="max-width:200px;" onchange="filterModule(this.value)">
-                        <option value="">All Modules</option>
-                        @foreach($permissionGroups->keys() as $mod)
-                            <option value="{{ $mod }}">{{ $moduleLabels[$mod] ?? $mod }}</option>
+                    <!-- Group filter -->
+                    <select id="moduleFilter" class="form-select form-select-sm" style="max-width:220px;" onchange="filterGroup(this.value)">
+                        <option value="">All Groups</option>
+                        @foreach(array_keys($topLevel) as $parentName)
+                            <option value="{{ $parentName }}">{{ $parentName }}</option>
                         @endforeach
                     </select>
                     @can('add permissions')
@@ -115,18 +131,36 @@
                             </thead>
                             <tbody>
                                 @php $rowNum = 0; @endphp
-                                @forelse($permissionGroups as $module => $permissions)
-                                <tr class="module-divider" data-module="{{ $module }}">
-                                    <td colspan="5" class="ps-3 py-2 bg-light">
+                                @forelse($topLevel as $parentName => $subModules)
+                                @php $isGrouped = count($subModules) > 1 || isset($parentGroupsMap[array_key_first($subModules)]); @endphp
+
+                                {{-- Parent group header (shown when module has sub-groups) --}}
+                                @if($isGrouped)
+                                <tr class="group-header" data-group="{{ $parentName }}">
+                                    <td colspan="5" class="ps-3 py-2" style="background-color: #eef2ff;">
+                                        <span class="fw-bold fs-12 text-uppercase" style="color:#4361ee;">
+                                            <i class="ri-grid-line me-1"></i>{{ $parentName }}
+                                            <span class="badge bg-primary ms-1">{{ collect($subModules)->flatten()->count() }}</span>
+                                        </span>
+                                    </td>
+                                </tr>
+                                @endif
+
+                                @foreach($subModules as $module => $permissions)
+
+                                {{-- Sub-module header --}}
+                                <tr class="module-divider {{ $isGrouped ? 'sub-module' : '' }}" data-group="{{ $parentName }}">
+                                    <td colspan="5" class="{{ $isGrouped ? 'ps-4' : 'ps-3' }} py-2 bg-light">
                                         <span class="fw-semibold text-muted fs-12 text-uppercase">
                                             <i class="ri-apps-line me-1"></i>{{ $moduleLabels[$module] ?? $module }}
                                             <span class="badge bg-secondary ms-1">{{ $permissions->count() }}</span>
                                         </span>
                                     </td>
                                 </tr>
+
                                 @foreach($permissions as $permission)
-                                @php $rowNum++; @endphp
-                                <tr data-module="{{ $module }}">
+                                @php $rowNum++; $assignedRoles = $permission->roles; @endphp
+                                <tr data-group="{{ $parentName }}" data-module="{{ $module }}">
                                     <td class="ps-3 text-muted fs-13">{{ $rowNum }}</td>
                                     <td>
                                         <div class="d-flex align-items-center gap-2">
@@ -145,7 +179,6 @@
                                         <span class="badge bg-light text-dark border">{{ $moduleLabels[$module] ?? $module }}</span>
                                     </td>
                                     <td>
-                                        @php $assignedRoles = $permission->roles; @endphp
                                         @if($assignedRoles->isEmpty())
                                             <span class="text-muted fs-13"><i class="ri-close-circle-line me-1"></i>None</span>
                                         @else
@@ -165,7 +198,6 @@
                                     </td>
                                     <td class="text-center">
                                         <div class="d-flex justify-content-center gap-1">
-                                            <!-- View -->
                                             <button type="button"
                                                     class="btn btn-sm btn-outline-info"
                                                     title="View details"
@@ -176,7 +208,6 @@
                                                     data-permission-roles="{{ $assignedRoles->pluck('name')->join(',') }}">
                                                 <i class="ri-eye-line"></i>
                                             </button>
-                                            <!-- Edit -->
                                             @can('edit permissions')
                                             <button type="button"
                                                     class="btn btn-sm btn-outline-primary"
@@ -190,7 +221,6 @@
                                                 <i class="ri-pencil-line"></i>
                                             </button>
                                             @endcan
-                                            <!-- Delete -->
                                             @can('delete permissions')
                                             <button type="button"
                                                     class="btn btn-sm btn-outline-danger"
@@ -205,6 +235,8 @@
                                         </div>
                                     </td>
                                 </tr>
+                                @endforeach
+
                                 @endforeach
                                 @empty
                                 <tr>
@@ -402,10 +434,10 @@
 
     @push('scripts')
     <script>
-    function filterModule(val) {
+    function filterGroup(val) {
         document.querySelectorAll('#permissionsTable tbody tr').forEach(function (tr) {
             if (!val) { tr.style.display = ''; return; }
-            tr.style.display = (tr.dataset.module === val) ? '' : 'none';
+            tr.style.display = (tr.dataset.group === val) ? '' : 'none';
         });
     }
 
