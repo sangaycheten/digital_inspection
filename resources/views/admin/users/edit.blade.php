@@ -1,6 +1,10 @@
 <x-app-layout>
     <x-slot name="title">Edit User</x-slot>
 
+    @push('styles')
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+    @endpush
+
     <div class="row">
         <div class="col-12">
             <div class="page-title-box d-sm-flex align-items-center justify-content-between">
@@ -118,7 +122,20 @@
                             @error('site_ids')
                                 <div class="text-danger small mb-1">{{ $message }}</div>
                             @enderror
+                            <div id="siteSearch" style="display:none;" class="mb-2">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-white"><i class="ri-search-line text-muted"></i></span>
+                                    <input type="text" id="siteSearchInput" class="form-control border-start-0"
+                                           placeholder="Search by client or site name…"
+                                           oninput="filterSites(this.value)">
+                                    <button class="btn btn-outline-secondary" type="button"
+                                            onclick="filterSites(''); document.getElementById('siteSearchInput').value=''">
+                                        <i class="ri-close-line"></i>
+                                    </button>
+                                </div>
+                            </div>
                             <div id="siteCheckboxes"></div>
+                            <div id="siteNoResults" class="text-muted fs-12 py-2 text-center" style="display:none;">No sites match your search.</div>
                             <div class="form-text text-muted mt-1">Select one or more sites this user can access.</div>
                         </div>
 
@@ -130,20 +147,47 @@
 
                         <div class="mb-3">
                             <label for="password" class="form-label">New Password</label>
-                            <input type="password" class="form-control @error('password') is-invalid @enderror"
-                                   id="password" name="password" autocomplete="new-password"
-                                   placeholder="Enter new password (optional)">
-                            @error('password')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
+                            <div class="input-group">
+                                <input type="password" class="form-control @error('password') is-invalid @enderror"
+                                       id="password" name="password" autocomplete="new-password"
+                                       placeholder="Enter new password (optional)">
+                                <button class="btn btn-outline-secondary" type="button"
+                                        onclick="togglePwd('password', this)" tabindex="-1">
+                                    <i class="ri-eye-line"></i>
+                                </button>
+                                @error('password')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
                             <div class="form-text">Min 8 characters with uppercase, lowercase, number, and symbol.</div>
                         </div>
 
                         <div class="mb-4">
                             <label for="password_confirmation" class="form-label">Confirm New Password</label>
-                            <input type="password" class="form-control"
-                                   id="password_confirmation" name="password_confirmation"
-                                   placeholder="Confirm new password">
+                            <div class="input-group">
+                                <input type="password" class="form-control"
+                                       id="password_confirmation" name="password_confirmation"
+                                       placeholder="Confirm new password">
+                                <button class="btn btn-outline-secondary" type="button"
+                                        onclick="togglePwd('password_confirmation', this)" tabindex="-1">
+                                    <i class="ri-eye-line"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="timezone" class="form-label">Timezone <span class="text-danger">*</span></label>
+                            <select class="form-select @error('timezone') is-invalid @enderror"
+                                    id="timezone" name="timezone" required>
+                                <option value="">— Select Timezone —</option>
+                                @foreach(\DateTimeZone::listIdentifiers() as $tz)
+                                    <option value="{{ $tz }}" {{ old('timezone', $user->timezone) === $tz ? 'selected' : '' }}>{{ $tz }}</option>
+                                @endforeach
+                            </select>
+                            @error('timezone')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                            <div class="form-text">Used to display system event times in the user's local time.</div>
                         </div>
 
                         <div class="hstack gap-2 justify-content-end">
@@ -158,27 +202,56 @@
         </div>
     </div>
 @push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
 <script>
-const allSitesList  = @json($sites);
-const sitesByClient = @json($sites->groupBy('client_id'));
-const savedSiteIds  = @json(old('site_ids') ?? $userSiteIds);
+const allSitesList  = {!! json_encode($sites) !!};
+const sitesByClient = {!! json_encode($sites->groupBy('client_id')) !!};
+const savedSiteIds  = {!! json_encode(old('site_ids') ?? $userSiteIds) !!};
 
 function onRoleChange(role) {
     const clientField = document.getElementById('clientField');
     const clientSel   = document.getElementById('client_id');
+    const siteSearch  = document.getElementById('siteSearch');
     if (role === 'client-user') {
         clientField.style.display = 'block';
         clientSel.required = true;
+        siteSearch.style.display = 'none';
         loadClientSites(clientSel.value, savedSiteIds);
     } else if (role === 'field-technician') {
         clientField.style.display = 'none';
         clientSel.required = false;
+        siteSearch.style.display = 'block';
         loadAllSites(allSitesList, savedSiteIds);
     } else {
         clientField.style.display = 'none';
         document.getElementById('siteField').style.display = 'none';
+        siteSearch.style.display = 'none';
         clientSel.required = false;
     }
+}
+
+function filterSites(query) {
+    const q       = query.trim().toLowerCase();
+    const groups  = document.querySelectorAll('#siteCheckboxes > div');
+    let   visible = 0;
+
+    groups.forEach(group => {
+        const clientLabel = (group.querySelector('.fw-semibold')?.textContent ?? '').toLowerCase();
+        const rows        = group.querySelectorAll('.site-row');
+        let   groupVisible = 0;
+
+        rows.forEach(row => {
+            const siteName = (row.querySelector('.fw-medium')?.textContent ?? '').toLowerCase();
+            const matches  = !q || clientLabel.includes(q) || siteName.includes(q);
+            row.style.display = matches ? '' : 'none';
+            if (matches) groupVisible++;
+        });
+
+        group.style.display = groupVisible > 0 ? '' : 'none';
+        visible += groupVisible;
+    });
+
+    document.getElementById('siteNoResults').style.display = visible === 0 && q ? '' : 'none';
 }
 
 function loadClientSites(clientId, checkedIds) {
@@ -225,7 +298,10 @@ function buildGroup(key, clientName, sites, checkedIds) {
                     <input type="checkbox" class="form-check-input flex-shrink-0 site-${key}" name="site_ids[]"
                            id="site_${s.id}" value="${s.id}" ${chk} onchange="updateGroupHeader('${key}')">
                     <span class="text-muted small flex-shrink-0">${i + 1}.</span>
-                    <span class="small">${s.address}</span>
+                    <span class="small">
+                        <span class="fw-medium">${s.name}</span>
+                        <span class="d-block text-muted" style="font-size:11px">${s.address}</span>
+                    </span>
                 </label>`;
     }).join('');
     return `<div class="border rounded mb-2 overflow-hidden">${header}${rows}</div>`;
@@ -254,7 +330,16 @@ function applyIndeterminate() {
     document.querySelectorAll('[data-indet="1"]').forEach(el => el.indeterminate = true);
 }
 
+function togglePwd(id, btn) {
+    const inp = document.getElementById(id);
+    const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    btn.querySelector('i').className = show ? 'ri-eye-off-line' : 'ri-eye-line';
+}
+
 document.addEventListener('DOMContentLoaded', function () {
+    new TomSelect('#timezone', { create: false, maxOptions: null });
+
     const role     = document.getElementById('role').value;
     const clientId = document.getElementById('client_id').value;
     document.getElementById('role').addEventListener('change', e => onRoleChange(e.target.value));

@@ -23,7 +23,7 @@ class QuestionnaireController extends Controller
         $fieldTypesForJs = FieldType::where('status', 'active')->orderBy('name')->get()
             ->map(fn($ft) => ['id' => $ft->id, 'name' => $ft->name, 'type' => $ft->type, 'options' => $ft->options ?? []])
             ->values()->all();
-        $sections   = Section::where('status', 'active')->orderBy('name')->get(['id', 'name']);
+        $sections   = Section::where('status', 'active')->orderBy('name')->get(['id', 'name', 'asset_type']);
         $assetTypes = MasterLookup::assetTypeMap();
 
         return view('admin.questionnaires.create', compact(
@@ -41,7 +41,7 @@ class QuestionnaireController extends Controller
             ->where('type', '!=', DataType::SubQuestionnaire->value)
             ->where('status', 'active')->where('id', '!=', $questionnaire->id)
             ->orderBy('name')->get(['id', 'name', 'key', 'type']);
-        $sections          = Section::where('status', 'active')->orderBy('name')->get(['id', 'name']);
+        $sections          = Section::where('status', 'active')->orderBy('name')->get(['id', 'name', 'asset_type']);
         $assetTypes        = MasterLookup::assetTypeMap();
         $subQuestionnaires = $questionnaire->subQuestionnaires()->orderBy('created_at')->get();
         $subsForJs         = $subQuestionnaires->map(fn($q) => [
@@ -65,22 +65,37 @@ class QuestionnaireController extends Controller
 
     public function index(Request $request): View
     {
-        $questionnaires = Questionnaire::with(['subQuestionnaires'])
-            ->whereNull('parent_id')
+        $tab = $request->input('tab', 'all');
+
+        $baseQuery = Questionnaire::whereNull('parent_id')
             ->when($request->search, fn($q) =>
                 $q->where('name', 'like', "%{$request->search}%")
                   ->orWhere('key', 'like', "%{$request->search}%"))
-            ->when($request->type,       fn($q) => $q->where('type',       $request->type))
             ->when($request->section_id, fn($q) => $q->where('section_id', $request->section_id))
-            ->when($request->asset_type, fn($q) => $q->where('asset_type', $request->asset_type))
-            ->when($request->status,     fn($q) => $q->where('status',     $request->status))
-            ->latest()->paginate(15)->withQueryString();
+            ->when($request->type,       fn($q) => $q->where('type',       $request->type))
+            ->when($request->status,     fn($q) => $q->where('status',     $request->status));
+
+        // Per-tab counts grouped by asset_type (respects all filters except asset_type)
+        $tabCounts = (clone $baseQuery)
+            ->selectRaw('asset_type, count(*) as c')
+            ->groupBy('asset_type')
+            ->pluck('c', 'asset_type');
+
+        $questionnaires = (clone $baseQuery)
+            ->with(['subQuestionnaires'])
+            ->when($tab !== 'all', fn($q) => $q->where('asset_type', $tab))
+            ->orderBy('sort_order')
+            ->orderBy('created_at')
+            ->paginate(15)
+            ->withQueryString();
 
         $typeOptions = DataType::valueLabelMap();
         $sections    = Section::where('status', 'active')->orderBy('name')->get(['id', 'name']);
         $assetTypes  = MasterLookup::assetTypeMap();
 
-        return view('admin.questionnaires.index', compact('questionnaires', 'typeOptions', 'sections', 'assetTypes'));
+        return view('admin.questionnaires.index', compact(
+            'questionnaires', 'typeOptions', 'sections', 'assetTypes', 'tab', 'tabCounts'
+        ));
     }
 
     public function store(Request $request): RedirectResponse
@@ -89,21 +104,45 @@ class QuestionnaireController extends Controller
         $groupSeqs      = $request->input('group_seq', []);
         $isGroupParents = $request->input('is_group_parent', []);
 
+        // Pre-compute group parent type per group_seq so we can validate condition for children
+        $groupParentTypes = [];
+        foreach ($types as $i => $type) {
+            $seq      = $groupSeqs[$i] ?? '';
+            $isParent = ($isGroupParents[$i] ?? '0') === '1';
+            if ($seq !== '' && $isParent) {
+                $groupParentTypes[$seq] = $type;
+            }
+        }
+
         $perRowRules    = [];
         $customMessages = [];
 
         foreach ($types as $i => $type) {
-            $num     = $i + 1;
-            $needsFt = in_array($type, [DataType::Toggle->value, DataType::OptionList->value]);
+            $num      = $i + 1;
+            $seq      = $groupSeqs[$i] ?? '';
+            $isParent = ($isGroupParents[$i] ?? '0') === '1';
+            $needsFt  = in_array($type, [DataType::Toggle->value, DataType::ThreeTierSwitch->value, DataType::OptionList->value]);
 
             $perRowRules["field_type_id.$i"] = $needsFt
                 ? ['required', 'uuid', 'exists:field_types,id']
                 : ['nullable'];
 
+            // condition required for children whose group parent is a switch or three-tier switch
+            if (!$isParent && $seq !== '') {
+                $parentType     = $groupParentTypes[$seq] ?? null;
+                $parentIsSwitch = in_array($parentType, [DataType::Toggle->value, DataType::ThreeTierSwitch->value]);
+                $perRowRules["condition.$i"] = $parentIsSwitch
+                    ? ['required', 'in:yes,no,opt1,opt2,opt3']
+                    : ['nullable', 'in:yes,no,opt1,opt2,opt3'];
+                if ($parentIsSwitch) {
+                    $customMessages["condition.{$i}.required"] = "Sub-question #{$num}: Condition is required.";
+                }
+            } else {
+                $perRowRules["condition.$i"] = ['nullable'];
+            }
+
             $customMessages["name.{$i}.required"]          = "Question #{$num}: Name is required.";
             $customMessages["key.{$i}.required"]           = "Question #{$num}: Key is required.";
-            $customMessages["key.{$i}.unique"]             = "Question #{$num}: This key is already taken — please choose a different one.";
-            $customMessages["key.{$i}.distinct"]           = "Question #{$num}: Duplicate key — each question must have a unique key.";
             $customMessages["key.{$i}.alpha_dash"]         = "Question #{$num}: Key may only contain letters, numbers, dashes, and underscores.";
             $customMessages["key.{$i}.max"]                = "Question #{$num}: Key must not exceed 100 characters.";
             $customMessages["type.{$i}.required"]          = "Question #{$num}: Please select a data type.";
@@ -115,13 +154,15 @@ class QuestionnaireController extends Controller
             'name'            => ['required', 'array', 'min:1'],
             'name.*'          => ['required', 'string', 'max:255'],
             'key'             => ['required', 'array', 'min:1'],
-            'key.*'           => ['required', 'string', 'max:100', 'alpha_dash', 'distinct', 'unique:questionnaires,key'],
+            'key.*'           => ['required', 'string', 'max:100', 'alpha_dash'],
             'type'            => ['required', 'array', 'min:1'],
             'type.*'          => ['required', new Enum(DataType::class)],
             'field_type_id'   => ['nullable', 'array'],
-            'asset_type'      => ['nullable', 'string'],
-            'section_id'      => ['nullable', 'array'],
-            'section_id.*'    => ['nullable', 'uuid', 'exists:sections,id'],
+            'condition'       => ['nullable', 'array'],
+            'condition.*'     => ['nullable', 'in:yes,no,opt1,opt2,opt3'],
+            'asset_type'      => ['required', 'string', Rule::exists('master_lookups', 'value')->where('category', 'asset_type')],
+            'section_id'      => ['required', 'array'],
+            'section_id.*'    => ['required', 'uuid', 'exists:sections,id'],
             'enabled'         => ['nullable', 'array'],
             'enabled.*'       => ['nullable', 'in:0,1'],
             'required'        => ['nullable', 'array'],
@@ -132,7 +173,8 @@ class QuestionnaireController extends Controller
             'group_seq'       => ['nullable', 'array'],
         ], $perRowRules), $customMessages);
 
-        $count = count($validated['name']);
+        $count    = count($validated['name']);
+        $usedKeys = Questionnaire::pluck('key')->flip()->toArray();
 
         // Pass 1 — create standalone questions and group parents; track IDs by group_seq.
         $groupParentIds = [];
@@ -143,7 +185,7 @@ class QuestionnaireController extends Controller
 
             $q = Questionnaire::create([
                 'name'          => $validated['name'][$i],
-                'key'           => strtolower($validated['key'][$i]),
+                'key'           => $this->makeUniqueKey(strtolower($validated['key'][$i]), $usedKeys),
                 'type'          => $validated['type'][$i],
                 'field_type_id' => $validated['field_type_id'][$i] ?? null,
                 'asset_type'    => $validated['asset_type'] ?? null,
@@ -166,15 +208,17 @@ class QuestionnaireController extends Controller
             $isParent = ($validated['is_group_parent'][$i] ?? '0') === '1';
             if ($seq === '' || $isParent) continue;
 
-            $parentId = $groupParentIds[$seq] ?? null;
+            $parentId       = $groupParentIds[$seq] ?? null;
+            $parentIsSwitch = in_array($groupParentTypes[$seq] ?? null, [DataType::Toggle->value, DataType::ThreeTierSwitch->value]);
 
             $q = Questionnaire::create([
                 'name'          => $validated['name'][$i],
-                'key'           => strtolower($validated['key'][$i]),
+                'key'           => $this->makeUniqueKey(strtolower($validated['key'][$i]), $usedKeys),
                 'type'          => $validated['type'][$i],
                 'field_type_id' => $validated['field_type_id'][$i] ?? null,
                 'asset_type'    => $validated['asset_type'] ?? null,
                 'section_id'    => $validated['section_id'][$i] ?? null,
+                'condition'     => $parentIsSwitch ? ($validated['condition'][$i] ?? null) : null,
                 'parent_id'     => $parentId,
                 'enabled'       => ($validated['enabled'][$i] ?? '0') === '1',
                 'required'      => ($validated['required'][$i] ?? '0') === '1',
@@ -195,22 +239,23 @@ class QuestionnaireController extends Controller
 
     public function update(Request $request, Questionnaire $questionnaire): RedirectResponse
     {
-        $needsFieldType = in_array($request->type, [DataType::Toggle->value, DataType::OptionList->value]);
+        $needsFieldType = in_array($request->type, [DataType::Toggle->value, DataType::ThreeTierSwitch->value, DataType::OptionList->value]);
         $isSubQ         = $request->type === DataType::SubQuestionnaire->value;
         $parentId       = $request->input('parent_id');
-        $parentIsSwitch = $isSubQ && $parentId && Questionnaire::where('id', $parentId)->value('type') === DataType::Toggle->value;
+        $parentType     = $isSubQ && $parentId ? Questionnaire::where('id', $parentId)->value('type') : null;
+        $parentIsSwitch = in_array($parentType, [DataType::Toggle->value, DataType::ThreeTierSwitch->value]);
 
         $data = $request->validate([
             'name'          => ['required', 'string', 'max:255'],
             'key'           => ['required', 'string', 'max:100', 'alpha_dash', Rule::unique('questionnaires', 'key')->ignore($questionnaire->id)],
             'type'          => ['required', new Enum(DataType::class)],
             'field_type_id' => $needsFieldType ? ['required', 'uuid', 'exists:field_types,id'] : ['nullable'],
-            'asset_type'    => ['nullable', 'string', Rule::exists('master_lookups', 'value')->where('category', 'asset_type')],
-            'section_id'    => ['nullable', 'uuid', 'exists:sections,id'],
+            'asset_type'    => ['required', 'string', Rule::exists('master_lookups', 'value')->where('category', 'asset_type')],
+            'section_id'    => ['required', 'uuid', 'exists:sections,id'],
             'parent_id'     => $isSubQ
                                 ? ['required', 'uuid', 'exists:questionnaires,id', Rule::notIn([$questionnaire->id])]
                                 : ['nullable'],
-            'condition'     => $parentIsSwitch ? ['required', 'in:yes,no'] : ['nullable', 'in:yes,no'],
+            'condition'     => $parentIsSwitch ? ['required', 'in:yes,no,opt1,opt2,opt3'] : ['nullable', 'in:yes,no,opt1,opt2,opt3'],
             'status'        => ['required', 'in:active,inactive'],
         ]);
 
@@ -235,19 +280,19 @@ class QuestionnaireController extends Controller
         $types          = $request->input('type', []);
         $perRowRules    = [];
         $customMessages = [];
-        $parentIsSwitch = $parent->type === DataType::Toggle->value;
+        $parentIsSwitch = in_array($parent->type, [DataType::Toggle->value, DataType::ThreeTierSwitch->value]);
 
         foreach ($types as $i => $type) {
             $num     = $i + 1;
-            $needsFt = in_array($type, [DataType::Toggle->value, DataType::OptionList->value]);
+            $needsFt = in_array($type, [DataType::Toggle->value, DataType::ThreeTierSwitch->value, DataType::OptionList->value]);
 
             $perRowRules["field_type_id.$i"] = $needsFt
                 ? ['required', 'uuid', 'exists:field_types,id']
                 : ['nullable'];
 
             $perRowRules["condition.$i"] = $parentIsSwitch
-                ? ['required', 'in:yes,no']
-                : ['nullable', 'in:yes,no'];
+                ? ['required', 'in:yes,no,opt1,opt2,opt3']
+                : ['nullable', 'in:yes,no,opt1,opt2,opt3'];
 
             $customMessages["name.{$i}.required"]          = "Sub-question #{$num}: Name is required.";
             $customMessages["key.{$i}.required"]           = "Sub-question #{$num}: Key is required.";
@@ -256,22 +301,22 @@ class QuestionnaireController extends Controller
             $customMessages["type.{$i}.required"]          = "Sub-question #{$num}: Please select a data type.";
             $customMessages["status.{$i}.required"]        = "Sub-question #{$num}: Status is required.";
             $customMessages["field_type_id.{$i}.required"] = "Sub-question #{$num}: Option set is required for this data type.";
-            $customMessages["condition.{$i}.required"]     = "Sub-question #{$num}: Condition (Yes/No) is required.";
+            $customMessages["condition.{$i}.required"]     = "Sub-question #{$num}: Condition is required.";
         }
 
         $validated = $request->validate(array_merge([
-            'asset_type'    => ['nullable', 'string', Rule::exists('master_lookups', 'value')->where('category', 'asset_type')],
+            'asset_type'    => ['required', 'string', Rule::exists('master_lookups', 'value')->where('category', 'asset_type')],
             'sub_id'        => ['nullable', 'array'],
             'sub_id.*'      => ['nullable', 'uuid'],
             'name'          => ['required', 'array', 'min:1'],
             'name.*'        => ['required', 'string', 'max:255'],
             'key'           => ['required', 'array', 'min:1'],
-            'key.*'         => ['required', 'string', 'max:100', 'alpha_dash', 'distinct'],
+            'key.*'         => ['required', 'string', 'max:100', 'alpha_dash'],
             'type'          => ['required', 'array', 'min:1'],
             'type.*'        => ['required', new Enum(DataType::class)],
             'field_type_id' => ['nullable', 'array'],
             'condition'     => ['nullable', 'array'],
-            'section_id'    => ['nullable', 'uuid', 'exists:sections,id'],
+            'section_id'    => ['required', 'uuid', 'exists:sections,id'],
             'enabled'       => ['nullable', 'array'],
             'enabled.*'     => ['nullable', 'in:0,1'],
             'required'      => ['nullable', 'array'],
@@ -284,15 +329,21 @@ class QuestionnaireController extends Controller
 
         $submittedIds = array_values(array_filter($validated['sub_id'] ?? [], fn($id) => !empty($id)));
 
+        // Build a set of keys already in use, excluding this parent's own children
+        // (so their current keys won't cause false conflicts when unchanged)
+        $childIds = Questionnaire::where('parent_id', $parent->id)->pluck('id');
+        $usedKeys = Questionnaire::whereNotIn('id', $childIds)->pluck('key')->flip()->toArray();
+
+        $count = count($validated['name']);
+
         Questionnaire::where('parent_id', $parent->id)
             ->when(!empty($submittedIds), fn($q) => $q->whereNotIn('id', $submittedIds))
             ->delete();
 
-        $count = count($validated['name']);
         for ($i = 0; $i < $count; $i++) {
             $row = [
                 'name'          => $validated['name'][$i],
-                'key'           => strtolower($validated['key'][$i]),
+                'key'           => $this->makeUniqueKey(strtolower($validated['key'][$i]), $usedKeys),
                 'type'          => $validated['type'][$i],
                 'field_type_id' => $validated['field_type_id'][$i] ?? null,
                 'section_id'    => $validated['section_id'] ?? null,
@@ -324,6 +375,40 @@ class QuestionnaireController extends Controller
             ->with('success', "Sub-questionnaires for \"{$parent->name}\" updated successfully.");
     }
 
+    public function moveUp(Questionnaire $questionnaire): RedirectResponse
+    {
+        $prev = Questionnaire::where('asset_type', $questionnaire->asset_type)
+            ->whereNull('parent_id')
+            ->where('sort_order', '<', $questionnaire->sort_order)
+            ->orderByDesc('sort_order')
+            ->first();
+
+        if ($prev) {
+            [$questionnaire->sort_order, $prev->sort_order] = [$prev->sort_order, $questionnaire->sort_order];
+            $questionnaire->save();
+            $prev->save();
+        }
+
+        return redirect()->route('admin.questionnaires.index', ['tab' => $questionnaire->asset_type]);
+    }
+
+    public function moveDown(Questionnaire $questionnaire): RedirectResponse
+    {
+        $next = Questionnaire::where('asset_type', $questionnaire->asset_type)
+            ->whereNull('parent_id')
+            ->where('sort_order', '>', $questionnaire->sort_order)
+            ->orderBy('sort_order')
+            ->first();
+
+        if ($next) {
+            [$questionnaire->sort_order, $next->sort_order] = [$next->sort_order, $questionnaire->sort_order];
+            $questionnaire->save();
+            $next->save();
+        }
+
+        return redirect()->route('admin.questionnaires.index', ['tab' => $questionnaire->asset_type]);
+    }
+
     public function destroy(Request $request, Questionnaire $questionnaire): RedirectResponse|JsonResponse
     {
         $name = $questionnaire->name;
@@ -339,5 +424,16 @@ class QuestionnaireController extends Controller
 
         return redirect()->route('admin.questionnaires.index')
             ->with('success', "Questionnaire \"{$name}\" deleted.");
+    }
+
+    private function makeUniqueKey(string $base, array &$used): string
+    {
+        $key = $base;
+        $n   = 1;
+        while (isset($used[$key])) {
+            $key = $base . '_' . $n++;
+        }
+        $used[$key] = true;
+        return $key;
     }
 }

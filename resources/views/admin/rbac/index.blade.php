@@ -4,6 +4,8 @@
     @push('styles')
     <style>
         .permission-matrix th { white-space: nowrap; }
+        .permission-matrix thead th { position: sticky; top: 0; z-index: 2; }
+        .permission-matrix-scroll { max-height: calc(100vh - 200px); overflow: auto; }
         .permission-matrix td.module-header {
             font-weight: 600;
             background-color: var(--vz-secondary-bg);
@@ -26,11 +28,12 @@
     <div class="row">
         <div class="col-12">
             <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                <h4 class="mb-sm-0">RBAC / Roles & Permissions</h4>
+                <h4 class="mb-sm-0">Roles & Permissions</h4>
                 <div class="page-title-right">
                     <ol class="breadcrumb m-0">
                         <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}">Home</a></li>
-                        <li class="breadcrumb-item active">RBAC / Roles</li>
+                        <li class="breadcrumb-item">User & Role Management</li>
+                        <li class="breadcrumb-item active">Roles & Permissions</li>
                     </ol>
                 </div>
             </div>
@@ -103,14 +106,16 @@
                     <h4 class="card-title mb-0 flex-grow-1">
                         <i class="ri-table-line me-2 text-primary"></i>Permission Matrix
                     </h4>
+                    @can('edit roles')
                     <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editPermissionsModal">
                         <i class="ri-edit-line me-1"></i> Edit Permissions
                     </button>
+                    @endcan
                 </div>
                 <div class="card-body p-0">
-                    <div class="table-responsive">
+                    <div class="permission-matrix-scroll">
                         <table class="table table-bordered permission-matrix mb-0">
-                            <thead class="table-dark">
+                            <thead class="table-light">
                                 <tr>
                                     <th style="min-width: 200px;">Permission</th>
                                     @foreach($roles as $role)
@@ -129,29 +134,30 @@
                                 </tr>
                             </thead>
                             <tbody>
+                                @php $restrictedModules = ['Master Data', 'User & Role Management', 'Audit Log']; @endphp
                                 @foreach($permissionGroups as $module => $permissions)
                                 <tr>
                                     <td class="module-header" colspan="{{ $roles->count() + 1 }}">
-                                        <i class="ri-apps-line me-1"></i> {{ $module }}
+                                        <i class="ri-apps-line me-1"></i> {{ $moduleLabels[$module] ?? $module }}
+                                        @if(in_array($module, $restrictedModules))
+                                            <span class="badge bg-warning-subtle text-warning ms-2 fs-11">
+                                                <i class="ri-lock-line me-1"></i>Admin & Manager only
+                                            </span>
+                                        @endif
                                     </td>
                                 </tr>
                                 @foreach($permissions as $permission)
                                 <tr>
                                     <td class="ps-4">
-                                        <span class="text-muted">{{ ucfirst($permission->name) }}</span>
+                                        <span class="text-muted">{{ Str::title($permission->name) }}</span>
                                     </td>
                                     @foreach($roles as $role)
+                                    @php $isRestricted = in_array($module, $restrictedModules) && !in_array($role->name, ['system-administrator', 'manager']); @endphp
                                     <td class="permission-check">
-                                        @if($module === 'Master')
-                                            @if($role->name === 'system-administrator')
-                                                <span class="text-success fs-18" title="Always granted — System Administrator only">
-                                                    <i class="ri-lock-fill"></i>
-                                                </span>
-                                            @else
-                                                <span class="text-muted fs-18" title="Restricted to System Administrator">
-                                                    <i class="ri-lock-line"></i>
-                                                </span>
-                                            @endif
+                                        @if($isRestricted)
+                                            <span class="text-muted fs-18" title="Locked — restricted to Admin & Manager only">
+                                                <i class="ri-lock-line"></i>
+                                            </span>
                                         @elseif($role->hasPermissionTo($permission->name))
                                             <span class="text-success fs-18"><i class="ri-checkbox-circle-fill"></i></span>
                                         @else
@@ -242,7 +248,7 @@
                         </div>
                         <div class="table-responsive">
                             <table class="table table-bordered permission-matrix">
-                                <thead class="table-dark">
+                                <thead class="table-light">
                                     <tr>
                                         <th style="min-width: 200px;">Permission</th>
                                         @foreach($roles as $role)
@@ -255,23 +261,23 @@
                                     <tr>
                                         <td class="module-header" colspan="{{ $roles->count() + 1 }}">
                                             <i class="ri-apps-line me-1"></i> {{ $module }}
+                                            @if(in_array($module, $restrictedModules))
+                                                <span class="badge bg-warning-subtle text-warning ms-2 fs-11">
+                                                    <i class="ri-lock-line me-1"></i>Admin & Manager only
+                                                </span>
+                                            @endif
                                         </td>
                                     </tr>
                                     @foreach($permissions as $permission)
                                     <tr>
-                                        <td class="ps-4">{{ ucfirst($permission->name) }}</td>
+                                        <td class="ps-4">{{ Str::title($permission->name) }}</td>
                                         @foreach($roles as $role)
+                                        @php $isRestricted = in_array($module, $restrictedModules) && !in_array($role->name, ['system-administrator', 'manager']); @endphp
                                         <td class="permission-check">
-                                            @if($module === 'Master')
-                                                @if($role->name === 'system-administrator')
-                                                    <span class="text-success fs-18" title="Always granted — System Administrator only">
-                                                        <i class="ri-lock-fill"></i>
-                                                    </span>
-                                                @else
-                                                    <span class="text-muted fs-18" title="Restricted to System Administrator">
-                                                        <i class="ri-lock-line"></i>
-                                                    </span>
-                                                @endif
+                                            @if($isRestricted)
+                                                <span class="text-muted fs-18" title="Locked — restricted to Admin & Manager only">
+                                                    <i class="ri-lock-line"></i>
+                                                </span>
                                             @else
                                                 <div class="form-check">
                                                     <input class="form-check-input" type="checkbox"

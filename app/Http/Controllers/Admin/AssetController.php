@@ -29,7 +29,8 @@ class AssetController extends Controller
             ->when($request->building_id, fn ($q) => $q->where('building_id', $request->building_id))
             ->when($request->asset_type, fn ($q) => $q->where('asset_type', $request->asset_type))
             ->when($request->status,    fn ($q) => $q->where('current_status', $request->status))
-            ->latest()
+            ->orderBy('asset_type')
+            ->orderBy('asset_code')
             ->paginate(20)
             ->withQueryString();
 
@@ -63,7 +64,6 @@ class AssetController extends Controller
             'zone'                     => ['nullable', 'string', 'max:255'],
             'asset_code'               => ['required', 'string', 'max:255'],
             'asset_type'               => ['required', Rule::exists('master_lookups', 'value')->where('category', 'asset_type')],
-            'group_id'                 => ['nullable', 'string', 'max:255'],
             'make'                     => ['nullable', 'string', 'max:255'],
             'model'                    => ['nullable', 'string', 'max:255'],
             'serial_or_batch'          => ['nullable', 'string', 'max:255'],
@@ -76,6 +76,12 @@ class AssetController extends Controller
             'asset_code.required' => 'Asset code is required.',
             'asset_type.in'       => 'Invalid asset type selected.',
         ]);
+
+        $site         = Site::with('client')->find($data['site_id']);
+        $buildingCode = $data['building_id'] ? Building::find($data['building_id'])?->building_code : null;
+        $locParts     = array_filter([$site?->client?->custom_client_code, $buildingCode]);
+        $prefix       = ($locParts ? implode('-', $locParts) . '-' : '') . $data['asset_type'];
+        $data['asset_code'] = $prefix . $data['asset_code'];
 
         $exists = Asset::where('site_id', $data['site_id'])
             ->where('asset_code', $data['asset_code'])
@@ -108,9 +114,8 @@ class AssetController extends Controller
             'site_id'                  => ['required', 'exists:sites,id'],
             'building_id'              => ['nullable', 'exists:buildings,id'],
             'zone'                     => ['nullable', 'string', 'max:255'],
-            'prefix'                   => ['required', 'string', 'max:50'],
-            'range_start'              => ['required', 'regex:/^\d+$/', 'integer', 'min:0'],
-            'range_end'                => ['required', 'regex:/^\d+$/', 'integer', 'min:0', 'gte:range_start'],
+            'range_start'              => ['required', 'regex:/^\d+$/'],
+            'range_end'                => ['required', 'regex:/^\d+$/', 'gte:range_start'],
             'quantity'                 => ['required', 'integer', 'min:1'],
             'asset_type'               => ['required', Rule::exists('master_lookups', 'value')->where('category', 'asset_type')],
             'make'                     => ['nullable', 'string', 'max:255'],
@@ -131,17 +136,19 @@ class AssetController extends Controller
             ]);
         }
 
-        // Pad width is taken from the raw input (e.g. "06" → pad 2, "6" → pad 1)
-        $padLength = strlen($request->input('range_end'));
-        $prefix    = $data['prefix'];
-        $pad       = fn (int $n) => str_pad($n, $padLength, '0', STR_PAD_LEFT);
+        $padLength    = strlen($request->input('range_end'));
+        $site         = Site::with('client')->find($data['site_id']);
+        $buildingCode = $data['building_id'] ? Building::find($data['building_id'])?->building_code : null;
+        $locParts     = array_filter([$site?->client?->custom_client_code, $buildingCode]);
+        $prefix       = ($locParts ? implode('-', $locParts) . '-' : '') . $data['asset_type'];
+        $pad          = fn (int $n) => str_pad($n, $padLength, '0', STR_PAD_LEFT);
 
         // Verify every code is unique before inserting any
         for ($i = $start; $i <= $end; $i++) {
             $code = $prefix . $pad($i);
             if (Asset::where('site_id', $data['site_id'])->where('asset_code', $code)->exists()) {
                 return back()->withInput()->withErrors([
-                    'prefix' => "Asset code '{$code}' already exists for this site.",
+                    'range_start' => "Asset code '{$code}' already exists for this site.",
                 ]);
             }
         }
@@ -183,7 +190,7 @@ class AssetController extends Controller
             'currentInspection.technician',
             'inspectionRecords.technician',
             'replacesAsset',
-            'replacedByAsset',
+            'replacedByAsset.creator',
         ]);
 
         $assetTypes = MasterLookup::assetTypeMap();
@@ -242,6 +249,12 @@ class AssetController extends Controller
     public function remove(Asset $asset): RedirectResponse
     {
         $asset->update(['current_status' => 'removed']);
+
+        activity()->useLog('asset')
+            ->causedBy(request()->user())
+            ->performedOn($asset)
+            ->event('removed')
+            ->log("Asset {$asset->asset_code} marked as removed.");
 
         return redirect()->route('admin.assets.show', $asset)
             ->with('success', "Asset {$asset->asset_code} has been marked as removed.");

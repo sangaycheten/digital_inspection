@@ -10,7 +10,7 @@ class Site extends Model
 {
     use SoftDeletes, HasUuids;
 
-    protected $fillable = ['client_id', 'name', 'address', 'latitude', 'longitude', 'site_notes'];
+    protected $fillable = ['client_id', 'name', 'address', 'latitude', 'longitude', 'site_notes', 'timezone'];
 
     public function client(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {

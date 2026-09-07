@@ -11,7 +11,7 @@
         'not_located'    => 'dark',
     ];
     $rc = $resultColors[$inspection->result] ?? 'secondary';
-    $isPending  = $inspection->document_status === 'draft';
+    $isPending  = $inspection->document_status === 'submitted';
     $isRejected = $isPending && str_starts_with($inspection->required_action ?? '', '[REJECTED]');
     @endphp
 
@@ -100,7 +100,7 @@
                                 </tr>
                                 <tr>
                                     <td class="text-muted ps-0 fs-13">Date</td>
-                                    <td class="fs-13">{{ $inspection->inspection_date->format('d M Y') }}</td>
+                                    <td class="fs-13">{{ site_time($inspection->inspection_date, $inspection->job->site->timezone, 'd M Y') }}</td>
                                 </tr>
                                 <tr>
                                     <td class="text-muted ps-0 fs-13">Result</td>
@@ -112,7 +112,7 @@
                                 </tr>
                                 <tr>
                                     <td class="text-muted ps-0 fs-13">Submitted</td>
-                                    <td class="fs-13 text-muted">{{ $inspection->created_at->format('d M Y H:i') }}</td>
+                                    <td class="fs-13 text-muted">{{ site_time($inspection->created_at, $inspection->job->site->timezone) }}</td>
                                 </tr>
                             </table>
                         </div>
@@ -179,6 +179,9 @@
             </div>
             @endif
 
+            {{-- Assessment trail --}}
+            @include('partials.inspection-trail')
+
             {{-- Previous inspection for comparison --}}
             @if($inspection->previousInspection)
             <div class="card">
@@ -233,17 +236,28 @@
                         <i class="ri-checkbox-circle-fill fs-18"></i>
                         <span>This inspection has been approved.</span>
                     </div>
+
+                    @elseif($inspection->document_status === 'draft')
+                    <div class="alert alert-warning d-flex align-items-start gap-2 mb-0">
+                        <i class="ri-arrow-go-back-line fs-18 mt-1 flex-shrink-0"></i>
+                        <div>
+                            <div class="fw-semibold">Sent back to technician</div>
+                            <div class="fs-13 mt-1">
+                                {{ ltrim(str_replace('[REJECTED]', '', $inspection->required_action ?? '')) ?: 'Awaiting re-submission.' }}
+                            </div>
+                        </div>
+                    </div>
+
                     @else
                     {{-- Approve --}}
-                    <form method="POST" action="{{ route('reviewer.inspections.approve', $inspection) }}" class="mb-3">
+                    <form id="approve-form" method="POST" action="{{ route('reviewer.inspections.approve', $inspection) }}" class="mb-3">
                         @csrf
-                        <button type="submit" class="btn btn-success w-100"
-                                onclick="return confirm('Approve this inspection? Asset status will be updated.')">
+                        <button type="button" id="approve-btn" class="btn btn-success w-100">
                             <i class="ri-checkbox-circle-line me-1"></i>Approve Inspection
                         </button>
                     </form>
 
-                    {{-- Reject --}}
+                    {{-- Send back --}}
                     <hr class="my-3">
                     <p class="text-muted fs-13 mb-2">Send back to technician for revision:</p>
                     <form method="POST" action="{{ route('reviewer.inspections.reject', $inspection) }}">
@@ -269,4 +283,29 @@
         </div>
 
     </div>
+
+@push('scripts')
+<script>
+document.getElementById('approve-btn')?.addEventListener('click', function () {
+    Swal.fire({
+        title: 'Approve Inspection?',
+        html: `<p class="mb-1">Asset: <strong>{{ $inspection->asset->asset_code }}</strong></p>
+               <p class="mb-1">Result: <strong>{{ ucwords(str_replace('_', ' ', $inspection->result)) }}</strong></p>
+               <p class="text-muted mt-2 mb-0 fs-13">Asset status will be updated immediately.</p>`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: '<i class="ri-checkbox-circle-line me-1"></i>Yes, Approve',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#0ab39c',
+        cancelButtonColor: '#6c757d',
+        reverseButtons: true,
+        focusCancel: true,
+    }).then(result => {
+        if (result.isConfirmed) {
+            document.getElementById('approve-form').submit();
+        }
+    });
+});
+</script>
+@endpush
 </x-app-layout>

@@ -10,6 +10,17 @@
     <!-- App favicon -->
     <link rel="shortcut icon" href="{{ asset('favicon.png') }}" type="image/png">
 
+    <!-- Persist dark mode & sidebar state before first paint -->
+    <script>
+    (function () {
+        var theme = localStorage.getItem('vs-theme');
+        if (theme === 'dark') {
+            document.documentElement.setAttribute('data-bs-theme', 'dark');
+            document.documentElement.setAttribute('data-sidebar', 'dark');
+        }
+    })();
+    </script>
+
     <!-- jsvectormap css -->
     <link href="{{ asset('assets/libs/jsvectormap/jsvectormap.min.css') }}" rel="stylesheet" type="text/css" />
 
@@ -119,9 +130,15 @@
                         </div>
 
                         <!-- Notifications -->
+                        @php $unreadNotifications = Auth::user()->unreadNotifications()->latest()->take(10)->get(); @endphp
                         <div class="dropdown topbar-head-dropdown ms-1 header-item" id="notificationDropdown">
-                            <button type="button" class="btn btn-icon btn-topbar material-shadow-none btn-ghost-secondary rounded-circle" id="page-header-notifications-dropdown" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-haspopup="true" aria-expanded="false">
+                            <button type="button" class="btn btn-icon btn-topbar material-shadow-none btn-ghost-secondary rounded-circle position-relative" id="page-header-notifications-dropdown" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-haspopup="true" aria-expanded="false">
                                 <i class='bx bx-bell fs-22'></i>
+                                @if($unreadNotifications->isNotEmpty())
+                                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger fs-10">
+                                    {{ $unreadNotifications->count() > 9 ? '9+' : $unreadNotifications->count() }}
+                                </span>
+                                @endif
                             </button>
                             <div class="dropdown-menu dropdown-menu-lg dropdown-menu-end p-0" aria-labelledby="page-header-notifications-dropdown">
                                 <div class="dropdown-head bg-primary bg-pattern rounded-top">
@@ -130,12 +147,67 @@
                                             <div class="col">
                                                 <h6 class="m-0 fs-16 fw-semibold text-white">Notifications</h6>
                                             </div>
+                                            @if($unreadNotifications->isNotEmpty())
+                                            <div class="col-auto">
+                                                <form method="POST" action="{{ route('notifications.markAllRead') }}">
+                                                    @csrf
+                                                    <button type="submit" class="btn btn-sm btn-light btn-rounded">Mark all read</button>
+                                                </form>
+                                            </div>
+                                            @endif
                                         </div>
                                     </div>
                                 </div>
-                                <div class="p-3 text-center text-muted">
-                                    No new notifications
+                                @if($unreadNotifications->isEmpty())
+                                <div class="p-4 text-center text-muted">
+                                    <i class="bx bx-bell-off fs-24 d-block mb-1"></i>No new notifications
                                 </div>
+                                @else
+                                <div class="py-2 ps-2" style="max-height:300px;overflow-y:auto;">
+                                    @foreach($unreadNotifications as $notif)
+                                    @php
+                                        $notifType  = class_basename($notif->type ?? '');
+                                        $notifIcon  = match($notifType) {
+                                            'JobAssignedNotification'           => 'ri-briefcase-line',
+                                            'InspectionRejectedNotification'    => 'ri-arrow-go-back-line',
+                                            'InspectionResubmittedNotification' => 'ri-refresh-line',
+                                            default                             => 'ri-file-list-3-line',
+                                        };
+                                        $notifColor = match($notifType) {
+                                            'JobAssignedNotification'           => 'bg-info-subtle text-info',
+                                            'InspectionRejectedNotification'    => 'bg-danger-subtle text-danger',
+                                            'InspectionResubmittedNotification' => 'bg-warning-subtle text-warning',
+                                            default                             => 'bg-primary-subtle text-primary',
+                                        };
+                                        $notifUrl = $notif->data['url'] ?? null;
+                                    @endphp
+                                    <div class="d-flex align-items-start gap-2 pe-2 py-2 border-bottom">
+                                        <div class="flex-shrink-0 mt-1">
+                                            <span class="avatar-title rounded-circle {{ $notifColor }} fs-14" style="width:32px;height:32px;">
+                                                <i class="{{ $notifIcon }}"></i>
+                                            </span>
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            @if($notifUrl)
+                                            <a href="{{ $notifUrl }}" class="text-body text-decoration-none">
+                                                <p class="mb-0 fs-12 lh-sm">{{ $notif->data['message'] ?? 'New notification' }}</p>
+                                            </a>
+                                            @else
+                                            <p class="mb-0 fs-12 lh-sm">{{ $notif->data['message'] ?? 'New notification' }}</p>
+                                            @endif
+                                            <small class="text-muted">{{ $notif->created_at->diffForHumans() }}</small>
+                                        </div>
+                                        <form method="POST" action="{{ route('notifications.markRead', $notif->id) }}" class="flex-shrink-0">
+                                            @csrf
+                                            <button type="submit" class="btn btn-sm btn-link p-0 text-muted" title="Dismiss"><i class="ri-close-line"></i></button>
+                                        </form>
+                                    </div>
+                                    @endforeach
+                                </div>
+                                <div class="p-2 text-center border-top">
+                                    <span class="text-muted fs-12">{{ $unreadNotifications->count() }} unread</span>
+                                </div>
+                                @endif
                             </div>
                         </div>
 
@@ -307,6 +379,30 @@
     <script src="{{ asset('assets/js/plugins.js') }}"></script>
     <script src="{{ asset('assets/js/app.js') }}"></script>
 
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
+
     @stack('scripts')
+
+    <script>
+    // Persist dark/light mode — reads AFTER the template has already toggled the attribute
+    document.querySelectorAll('.light-dark-mode').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            setTimeout(function () {
+                var theme = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'dark' : 'light';
+                localStorage.setItem('vs-theme', theme);
+            }, 50);
+        });
+    });
+
+    document.addEventListener('submit', function (e) {
+        const form = e.target;
+        const btn  = form.querySelector('[type="submit"]');
+        if (!btn || btn.dataset.noSpinner) return;
+        btn.disabled = true;
+        const icon = btn.querySelector('i');
+        const spinner = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>';
+        btn.innerHTML = spinner + (btn.dataset.spinnerLabel || btn.innerText.trim() || 'Saving…');
+    }, true);
+    </script>
 </body>
 </html>

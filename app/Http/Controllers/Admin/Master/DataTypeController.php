@@ -81,6 +81,9 @@ class DataTypeController extends Controller
         if ($type === DataType::Toggle->value) {
             $rules['options']   = ['required', 'array', 'size:2'];
             $rules['options.*'] = ['required', 'string', 'max:100'];
+        } elseif ($type === DataType::ThreeTierSwitch->value) {
+            $rules['options']   = ['required', 'array', 'size:3'];
+            $rules['options.*'] = ['required', 'string', 'max:100'];
         } elseif ($type === DataType::OptionList->value) {
             $rules['options']   = ['required', 'array', 'min:2'];
             $rules['options.*'] = ['required', 'string', 'max:100'];
@@ -90,7 +93,8 @@ class DataTypeController extends Controller
 
         $data = $request->validate($rules);
 
-        if (!in_array($type, [DataType::Toggle->value, DataType::OptionList->value])) {
+        $typesWithOptions = [DataType::Toggle->value, DataType::ThreeTierSwitch->value, DataType::OptionList->value];
+        if (!in_array($type, $typesWithOptions)) {
             $data['options'] = null;
         }
 

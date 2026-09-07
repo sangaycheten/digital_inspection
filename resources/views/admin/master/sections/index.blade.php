@@ -31,19 +31,30 @@
                         <i class="ri-layout-2-line me-2 text-primary"></i>All Sections
                         <span class="badge bg-primary-subtle text-primary ms-1">{{ $sections->total() }}</span>
                     </h5>
+                    @can('add sections')
                     <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#createSectionModal">
                         <i class="ri-add-line me-1"></i> Add Section
                     </button>
+                    @endcan
                 </div>
 
                 {{-- Filters --}}
                 <div class="card-body border-bottom pb-3">
                     <form method="GET" action="{{ route('admin.master.sections.index') }}" class="row g-2 align-items-end">
-                        <div class="col-md-5">
+                        <div class="col-md-4">
                             <label class="form-label text-muted fs-12 mb-1">Search</label>
                             <input type="text" name="search" class="form-control form-control-sm"
                                    placeholder="Search by name or key..."
                                    value="{{ request('search') }}">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label text-muted fs-12 mb-1">Asset Type</label>
+                            <select name="asset_type" class="form-select form-select-sm">
+                                <option value="">All Asset Types</option>
+                                @foreach($assetTypes as $val => $lbl)
+                                <option value="{{ $val }}" {{ request('asset_type') === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                                @endforeach
+                            </select>
                         </div>
                         <div class="col-md-2">
                             <label class="form-label text-muted fs-12 mb-1">Status</label>
@@ -70,8 +81,8 @@
                             <thead class="table-light">
                                 <tr>
                                     <th class="ps-3">#</th>
+                                    <th>Asset Type</th>
                                     <th>Section Name</th>
-                                    <th>Section Key</th>
                                     <th>Description</th>
                                     <th>Status</th>
                                     <th>Created</th>
@@ -82,8 +93,16 @@
                                 @forelse($sections as $section)
                                 <tr>
                                     <td class="ps-3 text-muted fs-12">{{ $sections->firstItem() + $loop->index }}</td>
+                                    <td>
+                                        @if($section->asset_type)
+                                            <span class="badge bg-primary-subtle text-primary">
+                                                {{ $assetTypes[$section->asset_type] ?? $section->asset_type }}
+                                            </span>
+                                        @else
+                                            <span class="text-muted">—</span>
+                                        @endif
+                                    </td>
                                     <td class="fw-medium">{{ $section->name }}</td>
-                                    <td><span class="badge bg-light text-dark font-monospace">{{ $section->key }}</span></td>
                                     <td class="text-muted fs-12">{{ Str::limit($section->description, 50) ?: '—' }}</td>
                                     <td>
                                         @if($section->status === 'active')
@@ -95,14 +114,18 @@
                                     <td class="text-muted fs-12">{{ $section->created_at->format('d M Y') }}</td>
                                     <td>
                                         <div class="hstack gap-1">
+                                            @can('edit sections')
                                             <button type="button" class="btn btn-sm btn-outline-primary"
                                                     data-bs-toggle="modal" data-bs-target="#editSectionModal{{ $section->id }}">
                                                 <i class="ri-edit-line"></i>
                                             </button>
+                                            @endcan
+                                            @can('delete sections')
                                             <button type="button" class="btn btn-sm btn-outline-danger"
                                                     data-bs-toggle="modal" data-bs-target="#deleteSectionModal{{ $section->id }}">
                                                 <i class="ri-delete-bin-line"></i>
                                             </button>
+                                            @endcan
                                         </div>
 
                                         {{-- Edit Modal --}}
@@ -117,16 +140,18 @@
                                                         @csrf @method('PUT')
                                                         <div class="modal-body">
                                                             <div class="mb-3">
+                                                                <label class="form-label">Asset Type <span class="text-danger">*</span></label>
+                                                                <select name="asset_type" class="form-select" required>
+                                                                    <option value="">-- Select Asset Type --</option>
+                                                                    @foreach($assetTypes as $val => $lbl)
+                                                                    <option value="{{ $val }}" {{ $section->asset_type === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                                                                    @endforeach
+                                                                </select>
+                                                            </div>
+                                                            <div class="mb-3">
                                                                 <label class="form-label">Section Name <span class="text-danger">*</span></label>
                                                                 <input type="text" name="name" class="form-control"
                                                                        value="{{ $section->name }}" required maxlength="255">
-                                                            </div>
-                                                            <div class="mb-3">
-                                                                <label class="form-label">Section Key <span class="text-danger">*</span></label>
-                                                                <input type="text" name="key" class="form-control font-monospace"
-                                                                       value="{{ $section->key }}" required maxlength="100"
-                                                                       placeholder="e.g. roof_inspection">
-                                                                <div class="form-text">Unique identifier. Only letters, numbers, hyphens and underscores.</div>
                                                             </div>
                                                             <div class="mb-3">
                                                                 <label class="form-label">Description</label>
@@ -205,17 +230,21 @@
                     @csrf
                     <div class="modal-body">
                         <div class="mb-3">
-                            <label class="form-label">Section Name <span class="text-danger">*</span></label>
-                            <input type="text" name="name" class="form-control @error('name') is-invalid @enderror"
-                                   value="{{ old('name') }}" required maxlength="255" placeholder="e.g. Roof Inspection">
-                            @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            <label class="form-label">Asset Type <span class="text-danger">*</span></label>
+                            <select name="asset_type" class="form-select @error('asset_type') is-invalid @enderror" required>
+                                <option value="">-- Select Asset Type --</option>
+                                @foreach($assetTypes as $val => $lbl)
+                                <option value="{{ $val }}" {{ old('asset_type') === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                                @endforeach
+                            </select>
+                            @error('asset_type')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Section Key <span class="text-danger">*</span></label>
-                            <input type="text" name="key" class="form-control font-monospace @error('key') is-invalid @enderror"
-                                   value="{{ old('key') }}" required maxlength="100" placeholder="e.g. roof_inspection">
-                            <div class="form-text">Unique identifier. Only letters, numbers, hyphens and underscores. Will be saved in lowercase.</div>
-                            @error('key')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            <label class="form-label">Section Name <span class="text-danger">*</span></label>
+                            <input type="text" name="name"
+                                   class="form-control @error('name') is-invalid @enderror"
+                                   value="{{ old('name') }}" required maxlength="255">
+                            @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Description</label>
@@ -243,7 +272,7 @@
 
     @push('scripts')
     <script>
-    @if($errors->has('name') || $errors->has('key') || $errors->has('description') || $errors->has('status'))
+    @if($errors->has('asset_type') || $errors->has('name') || $errors->has('description') || $errors->has('status'))
     document.addEventListener('DOMContentLoaded', function () {
         new bootstrap.Modal(document.getElementById('createSectionModal')).show();
     });

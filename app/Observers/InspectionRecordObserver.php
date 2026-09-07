@@ -36,12 +36,16 @@ class InspectionRecordObserver
     }
 
     /**
-     * Enforce append-only: updates are never allowed.
-     * A correction must be a new InspectionRecord referencing previous_inspection_id.
+     * Approved records are immutable audit entries.
+     * Draft and submitted records may be updated (e.g. save-as-draft edits, approval, rejection).
+     * A correction to an approved record must be a new InspectionRecord referencing previous_inspection_id.
      */
     public function updating(InspectionRecord $record): bool
     {
-        throw new \LogicException('inspection_records is append-only. Submit a new record with previous_inspection_id set instead.');
+        if ($record->getOriginal('document_status') === 'approved') {
+            throw new \LogicException('Approved inspection records are immutable. Submit a new record with previous_inspection_id set instead.');
+        }
+        return true;
     }
 
     public function deleting(InspectionRecord $record): bool

@@ -10,6 +10,8 @@ enum DataType: string
     case OptionList        = 'option_list';
     case LongText          = 'long_text';
     case SubQuestionnaire  = 'sub_questionnaire';
+    case ThreeTierSwitch   = 'three_tier_switch';
+    case Date              = 'date';
 
     public function label(): string
     {
@@ -20,6 +22,8 @@ enum DataType: string
             DataType::OptionList       => 'Option List',
             DataType::LongText         => 'Long Text',
             DataType::SubQuestionnaire => 'Sub-Questionnaire',
+            DataType::ThreeTierSwitch  => 'Three-Tier Switch',
+            DataType::Date             => 'Date',
         };
     }
 
@@ -32,6 +36,8 @@ enum DataType: string
             DataType::OptionList       => 'Select from a list of predefined options (more than one choice).',
             DataType::LongText         => 'Multi-line text input up to the allowed length.',
             DataType::SubQuestionnaire => 'A nested group of questions linked to a parent questionnaire.',
+            DataType::ThreeTierSwitch  => 'Three-option toggle — e.g. Pass / Fail / Review.',
+            DataType::Date             => 'Date picker input.',
         };
     }
 

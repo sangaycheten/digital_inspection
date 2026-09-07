@@ -370,6 +370,41 @@
                             <td class="fs-13">{{ $asset->updated_at->format('d M Y, H:i') }}</td>
                         </tr>
                         @endif
+                        @if($asset->replacedByAsset)
+                        <tr><td colspan="2"><hr class="my-1"></td></tr>
+                        <tr>
+                            <td class="text-muted ps-0 fs-13">Replaced by</td>
+                            <td class="fs-13">
+                                <a href="{{ route('admin.assets.show', $asset->replacedByAsset) }}" class="fw-medium">
+                                    {{ $asset->replacedByAsset->asset_code }}
+                                </a>
+                            </td>
+                        </tr>
+                        @if($asset->replacedByAsset->creator)
+                        <tr>
+                            <td class="text-muted ps-0 fs-13">Replaced by user</td>
+                            <td class="fs-13">{{ $asset->replacedByAsset->creator->name }}</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted ps-0 fs-13">Replaced at</td>
+                            <td class="fs-13">{{ $asset->replacedByAsset->created_at->format('d M Y, H:i') }}</td>
+                        </tr>
+                        @endif
+                        @elseif($asset->replacesAsset)
+                        <tr><td colspan="2"><hr class="my-1"></td></tr>
+                        <tr>
+                            <td class="text-muted ps-0 fs-13">Replaces</td>
+                            <td class="fs-13">
+                                <a href="{{ route('admin.assets.show', $asset->replacesAsset) }}" class="fw-medium">
+                                    {{ $asset->replacesAsset->asset_code }}
+                                </a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted ps-0 fs-13">Replaced by</td>
+                            <td class="fs-13">{{ $asset->creator->name ?? '—' }}</td>
+                        </tr>
+                        @endif
                     </table>
                 </div>
             </div>

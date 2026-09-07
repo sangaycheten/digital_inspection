@@ -31,9 +31,11 @@
                         <i class="ri-list-settings-line me-2 text-primary"></i>All Data Types
                         <span class="badge bg-primary-subtle text-primary ms-1">{{ $fieldTypes->total() }}</span>
                     </h5>
+                    @can('add data types')
                     <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#createDataTypeModal">
                         <i class="ri-add-line me-1"></i> Add Data Type
                     </button>
+                    @endcan
                 </div>
 
                 {{-- Filters --}}
@@ -118,6 +120,7 @@
                                     <td class="text-muted fs-12">{{ $ft->created_at->format('d M Y') }}</td>
                                     <td>
                                         <div class="hstack gap-1">
+                                            @can('edit data types')
                                             <button type="button" class="btn btn-sm btn-outline-primary"
                                                     data-bs-toggle="modal" data-bs-target="#editDataTypeModal"
                                                     data-id="{{ $ft->id }}"
@@ -127,10 +130,13 @@
                                                     data-status="{{ $ft->status }}">
                                                 <i class="ri-edit-line"></i>
                                             </button>
+                                            @endcan
+                                            @can('delete data types')
                                             <button type="button" class="btn btn-sm btn-outline-danger"
                                                     data-bs-toggle="modal" data-bs-target="#deleteDataTypeModal{{ $ft->id }}">
                                                 <i class="ri-delete-bin-line"></i>
                                             </button>
+                                            @endcan
                                         </div>
 
                                         {{-- Delete Modal --}}
@@ -234,6 +240,27 @@
                                 </div>
                             </div>
 
+                            {{-- Three-Tier Switch: exactly 3 fixed inputs --}}
+                            <div id="createThreeTierSection" style="display:none;">
+                                <div class="row g-2">
+                                    <div class="col-4">
+                                        <input type="text" name="options[]" id="createTtOpt1"
+                                               class="form-control" placeholder="Option 1 (e.g. Pass)"
+                                               maxlength="100" disabled>
+                                    </div>
+                                    <div class="col-4">
+                                        <input type="text" name="options[]" id="createTtOpt2"
+                                               class="form-control" placeholder="Option 2 (e.g. Fail)"
+                                               maxlength="100" disabled>
+                                    </div>
+                                    <div class="col-4">
+                                        <input type="text" name="options[]" id="createTtOpt3"
+                                               class="form-control" placeholder="Option 3 (e.g. Review)"
+                                               maxlength="100" disabled>
+                                    </div>
+                                </div>
+                            </div>
+
                             {{-- Option List: dynamic inputs --}}
                             <div id="createListSection" style="display:none;">
                                 <div id="createOptionsList"></div>
@@ -319,6 +346,27 @@
                                 </div>
                             </div>
 
+                            {{-- Three-Tier Switch: exactly 3 fixed inputs --}}
+                            <div id="editThreeTierSection" style="display:none;">
+                                <div class="row g-2">
+                                    <div class="col-4">
+                                        <input type="text" name="options[]" id="editTtOpt1"
+                                               class="form-control" placeholder="Option 1 (e.g. Pass)"
+                                               maxlength="100" disabled>
+                                    </div>
+                                    <div class="col-4">
+                                        <input type="text" name="options[]" id="editTtOpt2"
+                                               class="form-control" placeholder="Option 2 (e.g. Fail)"
+                                               maxlength="100" disabled>
+                                    </div>
+                                    <div class="col-4">
+                                        <input type="text" name="options[]" id="editTtOpt3"
+                                               class="form-control" placeholder="Option 3 (e.g. Review)"
+                                               maxlength="100" disabled>
+                                    </div>
+                                </div>
+                            </div>
+
                             {{-- Option List: dynamic inputs --}}
                             <div id="editListSection" style="display:none;">
                                 <div id="editOptionsList"></div>
@@ -388,9 +436,13 @@
         // disable everything first so disabled inputs don't submit
         document.getElementById('createSwOpt1').disabled = true;
         document.getElementById('createSwOpt2').disabled = true;
+        document.getElementById('createTtOpt1').disabled = true;
+        document.getElementById('createTtOpt2').disabled = true;
+        document.getElementById('createTtOpt3').disabled = true;
         document.querySelectorAll('#createOptionsList input').forEach(i => i.disabled = true);
 
         swSection.style.display  = 'none';
+        document.getElementById('createThreeTierSection').style.display = 'none';
         lstSection.style.display = 'none';
         wrap.style.display       = 'none';
 
@@ -400,6 +452,14 @@
             swSection.style.display = '';
             document.getElementById('createSwOpt1').disabled = false;
             document.getElementById('createSwOpt2').disabled = false;
+
+        } else if (type === 'three_tier_switch') {
+            hint.textContent = 'Enter exactly 3 options (e.g. Pass / Fail / Review).';
+            wrap.style.display = '';
+            document.getElementById('createThreeTierSection').style.display = '';
+            document.getElementById('createTtOpt1').disabled = false;
+            document.getElementById('createTtOpt2').disabled = false;
+            document.getElementById('createTtOpt3').disabled = false;
 
         } else if (type === 'option_list') {
             hint.textContent = 'Enter at least 2 options. Use "Add Option" to add more.';
@@ -437,9 +497,13 @@
 
         document.getElementById('editSwOpt1').disabled = true;
         document.getElementById('editSwOpt2').disabled = true;
+        document.getElementById('editTtOpt1').disabled = true;
+        document.getElementById('editTtOpt2').disabled = true;
+        document.getElementById('editTtOpt3').disabled = true;
         document.querySelectorAll('#editOptionsList input').forEach(i => i.disabled = true);
 
         swSection.style.display  = 'none';
+        document.getElementById('editThreeTierSection').style.display = 'none';
         lstSection.style.display = 'none';
         wrap.style.display       = 'none';
 
@@ -451,6 +515,17 @@
             const o2 = document.getElementById('editSwOpt2');
             o1.disabled = false; o1.value = prefill[0] || '';
             o2.disabled = false; o2.value = prefill[1] || '';
+
+        } else if (type === 'three_tier_switch') {
+            hint.textContent = 'Enter exactly 3 options (e.g. Pass / Fail / Review).';
+            wrap.style.display = '';
+            document.getElementById('editThreeTierSection').style.display = '';
+            const t1 = document.getElementById('editTtOpt1');
+            const t2 = document.getElementById('editTtOpt2');
+            const t3 = document.getElementById('editTtOpt3');
+            t1.disabled = false; t1.value = prefill[0] || '';
+            t2.disabled = false; t2.value = prefill[1] || '';
+            t3.disabled = false; t3.value = prefill[2] || '';
 
         } else if (type === 'option_list') {
             hint.textContent = 'Enter at least 2 options. Use "Add Option" to add more.';
@@ -516,6 +591,10 @@
             if (oldType === 'switch') {
                 if (oldOptions[0]) document.getElementById('createSwOpt1').value = oldOptions[0];
                 if (oldOptions[1]) document.getElementById('createSwOpt2').value = oldOptions[1];
+            } else if (oldType === 'three_tier_switch') {
+                if (oldOptions[0]) document.getElementById('createTtOpt1').value = oldOptions[0];
+                if (oldOptions[1]) document.getElementById('createTtOpt2').value = oldOptions[1];
+                if (oldOptions[2]) document.getElementById('createTtOpt3').value = oldOptions[2];
             } else if (oldType === 'option_list') {
                 const list = document.getElementById('createOptionsList');
                 list.innerHTML = '';

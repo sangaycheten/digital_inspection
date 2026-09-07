@@ -1,16 +1,16 @@
 @use('Illuminate\Support\Facades\Storage')
 <x-app-layout>
-    <x-slot name="title">Hierarchy</x-slot>
+    <x-slot name="title">Client Assignments</x-slot>
 
     <div class="row">
         <div class="col-12">
             <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                <h4 class="mb-sm-0">Hierarchy</h4>
+                <h4 class="mb-sm-0">Client Assignments</h4>
                 <div class="page-title-right">
                     <ol class="breadcrumb m-0">
                         <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}">Home</a></li>
                         <li class="breadcrumb-item">Master</li>
-                        <li class="breadcrumb-item active">Hierarchy</li>
+                        <li class="breadcrumb-item active">Client Assignments</li>
                     </ol>
                 </div>
             </div>
@@ -88,11 +88,13 @@
                     </span>
                     @endif
 
+                    @can('edit client assignments')
                     <button type="button"
                             class="btn btn-sm btn-outline-primary flex-shrink-0"
                             onclick="openAssignModal('{{ $client->id }}', '{{ addslashes($client->name) }}', '{{ $client->manager_id ?? '' }}')">
                         <i class="ri-user-settings-line me-1"></i>Assign
                     </button>
+                    @endcan
                 </div>
             </div>
 

@@ -28,31 +28,26 @@
             <div class="card">
                 <div class="card-header d-flex align-items-center">
                     <h5 class="card-title mb-0 flex-grow-1">
-                        <i class="ri-questionnaire-line me-2 text-primary"></i>All Questionnaires
+                        <i class="ri-questionnaire-line me-2 text-primary"></i>
+                        {{ $tab === 'all' || !$tab ? 'All Questionnaires' : ($assetTypes[$tab] ?? 'Questionnaires') }}
                         <span class="badge bg-primary-subtle text-primary ms-1">{{ $questionnaires->total() }}</span>
                     </h5>
+                    @can('add questionnaires')
                     <a href="{{ route('admin.questionnaires.create') }}" class="btn btn-sm btn-primary">
                         <i class="ri-add-line me-1"></i> Add Questionnaire
                     </a>
+                    @endcan
                 </div>
 
                 {{-- Filters --}}
                 <div class="card-body border-bottom pb-3">
                     <form method="GET" action="{{ route('admin.questionnaires.index') }}" class="row g-2 align-items-end">
-                        <div class="col-md-4">
+                        <input type="hidden" name="tab" value="{{ $tab }}">
+                        <div class="col-md-3">
                             <label class="form-label text-muted fs-12 mb-1">Search</label>
                             <input type="text" name="search" class="form-control form-control-sm"
                                    placeholder="Search by name or key..."
                                    value="{{ request('search') }}">
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label text-muted fs-12 mb-1">Asset Type</label>
-                            <select name="asset_type" class="form-select form-select-sm">
-                                <option value="">All Asset Types</option>
-                                @foreach($assetTypes as $val => $label)
-                                <option value="{{ $val }}" {{ request('asset_type') === $val ? 'selected' : '' }}>{{ $label }}</option>
-                                @endforeach
-                            </select>
                         </div>
                         <div class="col-md-2">
                             <label class="form-label text-muted fs-12 mb-1">Section</label>
@@ -93,6 +88,32 @@
                     </form>
                 </div>
 
+                {{-- Asset Type Tabs --}}
+                @php $totalCount = $tabCounts->sum(); @endphp
+                <div class="border-bottom px-3">
+                    <ul class="nav nav-tabs nav-tabs-custom nav-primary" role="tablist">
+                        <li class="nav-item">
+                            <a class="nav-link py-2 {{ $tab === 'all' ? 'active' : '' }}"
+                               href="{{ route('admin.questionnaires.index', array_merge(request()->except(['tab','page']), ['tab' => 'all'])) }}">
+                                All
+                                <span class="badge {{ $tab === 'all' ? 'bg-primary' : 'bg-light text-dark' }} ms-1 fs-10">{{ $totalCount }}</span>
+                            </a>
+                        </li>
+                        @foreach($assetTypes as $val => $label)
+                        @php $cnt = $tabCounts->get($val, 0); @endphp
+                        @if($cnt > 0)
+                        <li class="nav-item">
+                            <a class="nav-link py-2 {{ $tab === $val ? 'active' : '' }}"
+                               href="{{ route('admin.questionnaires.index', array_merge(request()->except(['tab','page']), ['tab' => $val])) }}">
+                                {{ $label }}
+                                <span class="badge {{ $tab === $val ? 'bg-primary' : 'bg-light text-dark' }} ms-1 fs-10">{{ $cnt }}</span>
+                            </a>
+                        </li>
+                        @endif
+                        @endforeach
+                    </ul>
+                </div>
+
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
@@ -100,7 +121,6 @@
                                 <tr>
                                     <th class="ps-3" style="width:50px;">#</th>
                                     <th>Question Name</th>
-                                    <th style="width:160px;">Key</th>
                                     <th style="width:130px;">Asset Type</th>
                                     <th>Data Type</th>
                                     <th style="width:80px;">Enabled</th>
@@ -142,7 +162,6 @@
                                         </div>
                                         @endif
                                     </td>
-                                    <td><span class="badge bg-light text-dark font-monospace">{{ $q->key }}</span></td>
                                     <td>
                                         @if($q->asset_type)
                                         <span class="badge bg-info-subtle text-info">{{ $assetTypes[$q->asset_type] ?? $q->asset_type }}</span>
@@ -181,16 +200,36 @@
                                     <td class="text-muted fs-12">{{ $q->created_at->format('d M Y') }}</td>
                                     <td>
                                         <div class="hstack gap-1">
+                                            @can('edit questionnaires')
+                                            @if($tab !== 'all')
+                                            <form method="POST" action="{{ route('admin.questionnaires.move-up', $q) }}">
+                                                @csrf
+                                                <button type="submit" class="btn btn-sm btn-outline-secondary {{ $loop->first ? 'disabled' : '' }}"
+                                                        title="Move Up" {{ $loop->first ? 'disabled' : '' }}>
+                                                    <i class="ri-arrow-up-s-line"></i>
+                                                </button>
+                                            </form>
+                                            <form method="POST" action="{{ route('admin.questionnaires.move-down', $q) }}">
+                                                @csrf
+                                                <button type="submit" class="btn btn-sm btn-outline-secondary {{ $loop->last ? 'disabled' : '' }}"
+                                                        title="Move Down" {{ $loop->last ? 'disabled' : '' }}>
+                                                    <i class="ri-arrow-down-s-line"></i>
+                                                </button>
+                                            </form>
+                                            @endif
                                             <a href="{{ route('admin.questionnaires.edit', $q) }}"
                                                class="btn btn-sm btn-outline-primary"
                                                title="Edit">
                                                 <i class="ri-edit-line"></i>
                                             </a>
+                                            @endcan
+                                            @can('delete questionnaires')
                                             <button type="button" class="btn btn-sm btn-outline-danger"
                                                     data-bs-toggle="modal"
                                                     data-bs-target="#deleteModal{{ $q->id }}">
                                                 <i class="ri-delete-bin-line"></i>
                                             </button>
+                                            @endcan
                                         </div>
 
                                         {{-- Delete confirmation modal --}}

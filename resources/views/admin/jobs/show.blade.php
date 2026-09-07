@@ -47,7 +47,22 @@
     @if(session('success'))
     <div class="alert alert-success alert-dismissible alert-border-left fade show" role="alert">
         <i class="ri-checkbox-circle-line me-3 align-middle fs-16"></i>{{ session('success') }}
+        @if(session('certificate_ready'))
+        &nbsp;
+        <a href="{{ route('admin.jobs.certificate', $job) }}" class="btn btn-sm btn-success ms-2">
+            <i class="ri-file-download-line me-1"></i>Download Certificate
+        </a>
+        @endif
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    @endif
+
+    @if(in_array($job->status, ['issued', 'closed']))
+    <div class="alert alert-info alert-border-left d-flex align-items-center justify-content-between">
+        <span><i class="ri-award-line me-2 fs-16 align-middle"></i>Inspection certificate is available for this job.</span>
+        <a href="{{ route('admin.jobs.certificate', $job) }}" class="btn btn-sm btn-primary ms-3">
+            <i class="ri-file-download-line me-1"></i>Download Certificate
+        </a>
     </div>
     @endif
 
@@ -115,11 +130,21 @@
                                         </tr>
                                         <tr>
                                             <td class="text-muted ps-0 fs-13">Scheduled</td>
-                                            <td class="fs-13">{{ $job->scheduled_date?->format('d M Y') ?? '—' }}</td>
+                                            <td class="fs-13">
+                                                @if($job->scheduled_date)
+                                                    {{ $job->scheduled_date->format('d M Y') }}
+                                                    @if($job->scheduled_time)
+                                                        {{ \Carbon\Carbon::parse($job->scheduled_time)->format('H:i') }}
+                                                    @endif
+                                                    <span class="text-muted ms-1">{{ \Carbon\Carbon::now($job->site->timezone)->format('T') }}</span>
+                                                @else
+                                                    —
+                                                @endif
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td class="text-muted ps-0 fs-13">Created</td>
-                                            <td class="fs-13">{{ $job->created_at->format('d M Y') }}</td>
+                                            <td class="fs-13">{{ site_time($job->created_at, $job->site->timezone) }}</td>
                                         </tr>
                                         <tr>
                                             <td class="text-muted ps-0 fs-13">Created by</td>
@@ -134,16 +159,37 @@
                                 </div>
                                 @endif
 
-                                {{-- Technicians --}}
+                                {{-- Technician-Building Assignment Matrix --}}
                                 <div class="col-12">
-                                    <h6 class="text-uppercase text-muted fw-semibold fs-11 mb-2">Assigned Technicians</h6>
-                                    @forelse($job->technicians as $tech)
-                                    <span class="badge bg-primary-subtle text-primary me-1 mb-1 fs-12 px-2 py-1">
-                                        <i class="ri-user-line me-1"></i>{{ $tech->name }}
-                                    </span>
-                                    @empty
-                                    <span class="text-muted fs-13">None assigned.</span>
-                                    @endforelse
+                                    <h6 class="text-uppercase text-muted fw-semibold fs-11 mb-2">Technician-Building Assignments</h6>
+                                    @if($assignments->isEmpty())
+                                    <span class="text-muted fs-13">No assignments.</span>
+                                    @else
+                                    <div class="table-responsive">
+                                        <table class="table table-bordered table-sm align-middle mb-0" style="max-width:480px">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th class="ps-2 fs-12">Building</th>
+                                                    <th class="fs-12">Technicians</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach($assignments as $building => $rows)
+                                                <tr>
+                                                    <td class="ps-2 fw-medium fs-13">{{ $building }}</td>
+                                                    <td>
+                                                        @foreach($rows as $row)
+                                                        <span class="badge bg-primary-subtle text-primary me-1 fs-12">
+                                                            <i class="ri-user-line me-1"></i>{{ $row->technician }}
+                                                        </span>
+                                                        @endforeach
+                                                    </td>
+                                                </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    @endif
                                 </div>
                             </div>
                         </div>
@@ -356,8 +402,179 @@
             </div>
             @endif
 
+            {{-- Certificate Management (issued / closed only) --}}
+            @if(in_array($job->status, ['issued', 'closed']))
+            @php
+                $clientUsers  = \App\Models\User::where('client_id', $job->client_id)->whereNotNull('email')->get();
+                $clientEmail  = trim($job->client->email ?? '');
+                $billingEmail = trim($job->client->billing_contact_info ?? '');
+
+                // Collect unique valid recipient emails
+                $recipients = collect();
+                if (filter_var($clientEmail, FILTER_VALIDATE_EMAIL)) {
+                    $recipients->push($clientEmail);
+                }
+                foreach ($clientUsers->pluck('email') as $ue) {
+                    if (!$recipients->contains($ue)) $recipients->push($ue);
+                }
+                if (filter_var($billingEmail, FILTER_VALIDATE_EMAIL) && !$recipients->contains($billingEmail)) {
+                    $recipients->push($billingEmail);
+                }
+
+                $hasMail = $recipients->isNotEmpty();
+            @endphp
+            <div class="card mt-3 border-0 shadow-sm">
+                <div class="card-header bg-dark text-white py-2 px-3">
+                    <h6 class="mb-0 fs-13"><i class="ri-award-line me-2"></i>Certificate Management</h6>
+                </div>
+                <div class="card-body p-3">
+
+                    {{-- Download --}}
+                    <a href="{{ route('admin.jobs.certificate', $job) }}" class="btn btn-outline-primary w-100 mb-2">
+                        <i class="ri-file-download-line me-1"></i>Download Certificate
+                    </a>
+
+                    {{-- Regenerate --}}
+                    <a href="{{ route('admin.jobs.certificate', $job) }}" class="btn btn-outline-secondary w-100 mb-2"
+                       id="regenerate-cert-btn">
+                        <i class="ri-refresh-line me-1"></i>Regenerate Certificate
+                    </a>
+
+                    {{-- Send via Email --}}
+                    @if($hasMail)
+                    <form method="POST" action="{{ route('admin.jobs.sendCertificate', $job) }}" class="mb-2">
+                        @csrf
+                        <button type="submit" class="btn btn-outline-success w-100 send-cert-btn"
+                                data-recipients="{{ $recipients->join(', ') }}">
+                            <i class="ri-mail-send-line me-1"></i>
+                            @if($job->certificate_sent_at)
+                                Resend Certificate
+                            @else
+                                Send via Email
+                            @endif
+                        </button>
+                    </form>
+                    @if($job->certificate_sent_at)
+                    <p class="text-muted fs-11 text-center mb-2">
+                        <i class="ri-checkbox-circle-line text-success me-1"></i>
+                        Sent {{ site_time($job->certificate_sent_at, $job->site->timezone) }}
+                    </p>
+                    @endif
+                    <p class="text-muted fs-11 mb-2">
+                        <i class="ri-mail-line me-1"></i>To: {{ $recipients->join(', ') }}
+                    </p>
+                    @else
+                    <div class="alert alert-warning py-2 px-3 mb-2 fs-12">
+                        <i class="ri-mail-close-line me-1"></i>
+                        Cannot send — no email address found for this client.
+                        <br><small>Add a client user with an email or set a valid billing contact email.</small>
+                    </div>
+                    @endif
+
+                    {{-- Client Portal Access --}}
+                    <form id="toggle-access-form" method="POST" action="{{ route('admin.jobs.toggleCertificateAccess', $job) }}">
+                        @csrf
+                        <button type="button" id="toggle-access-btn"
+                                class="btn w-100 {{ $job->certificate_accessible ? 'btn-danger' : 'btn-outline-secondary' }}"
+                                data-accessible="{{ $job->certificate_accessible ? '1' : '0' }}"
+                                data-client="{{ $job->client->name ?? 'the client' }}">
+                            @if($job->certificate_accessible)
+                                <i class="ri-eye-off-line me-1"></i>Revoke Client Access
+                            @else
+                                <i class="ri-eye-line me-1"></i>Make Accessible to Client
+                            @endif
+                        </button>
+                    </form>
+                    @if($job->certificate_accessible)
+                    <p class="text-success fs-11 text-center mt-1 mb-0">
+                        <i class="ri-checkbox-circle-line me-1"></i>Client can download this certificate from their portal.
+                    </p>
+                    @endif
+
+                </div>
+            </div>
+            @endif
+
         </div>
 
     </div>
 
+@push('scripts')
+<script>
+    // Send via email confirmation
+    document.querySelectorAll('.send-cert-btn').forEach(function (btn) {
+        btn.closest('form').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const form = this;
+            const recipients = btn.dataset.recipients;
+            Swal.fire({
+                title: 'Send Certificate?',
+                html: `<p class="mb-1">The certificate PDF will be emailed to:</p><p><strong>${recipients}</strong></p>`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: '<i class="ri-mail-send-line me-1"></i>Yes, Send',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#0ab39c',
+                cancelButtonColor: '#6c757d',
+                reverseButtons: true,
+                focusCancel: true,
+            }).then(result => {
+                if (result.isConfirmed) form.submit();
+            });
+        });
+    });
+
+    // Regenerate certificate confirmation
+    const regenBtn = document.getElementById('regenerate-cert-btn');
+    if (regenBtn) {
+        regenBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            const url = this.href;
+            Swal.fire({
+                title: 'Regenerate Certificate?',
+                html: '<p>A fresh certificate will be generated from the latest approved inspection data and downloaded.</p>',
+                icon: 'info',
+                showCancelButton: true,
+                confirmButtonText: '<i class="ri-refresh-line me-1"></i>Yes, Regenerate',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#405189',
+                cancelButtonColor: '#6c757d',
+                reverseButtons: true,
+                focusCancel: true,
+            }).then(result => {
+                if (result.isConfirmed) window.location.href = url;
+            });
+        });
+    }
+
+    // Toggle client access confirmation
+    const toggleBtn = document.getElementById('toggle-access-btn');
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', function () {
+            const isAccessible = this.dataset.accessible === '1';
+            const client = this.dataset.client;
+            const form = document.getElementById('toggle-access-form');
+
+            Swal.fire({
+                title: isAccessible ? 'Revoke Client Access?' : 'Make Accessible to Client?',
+                html: isAccessible
+                    ? `<p><strong>${client}</strong> will no longer be able to download this certificate from their portal.</p>`
+                    : `<p><strong>${client}</strong> will be able to download this certificate directly from their client portal.</p>`,
+                icon: isAccessible ? 'warning' : 'info',
+                showCancelButton: true,
+                confirmButtonText: isAccessible
+                    ? '<i class="ri-eye-off-line me-1"></i>Yes, Revoke'
+                    : '<i class="ri-eye-line me-1"></i>Yes, Enable',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: isAccessible ? '#f06548' : '#0ab39c',
+                cancelButtonColor: '#6c757d',
+                reverseButtons: true,
+                focusCancel: true,
+            }).then(result => {
+                if (result.isConfirmed) form.submit();
+            });
+        });
+    }
+</script>
+@endpush
 </x-app-layout>

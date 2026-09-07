@@ -127,12 +127,23 @@
                                 </tr>
                             </thead>
                             <tbody>
+                                @php $currentType = null; @endphp
                                 @forelse($assets as $asset)
                                 @php
                                     $color = $statusColors[$asset->current_status] ?? 'secondary';
                                     $due = $asset->next_inspection_due_date;
                                     $dueClass = $due && $due->isPast() ? 'text-danger fw-semibold' : ($due && $due->diffInDays(now()) <= 30 ? 'text-warning fw-semibold' : 'text-muted');
                                 @endphp
+                                @if($asset->asset_type !== $currentType)
+                                @php $currentType = $asset->asset_type; @endphp
+                                <tr class="table-light border-top border-2">
+                                    <td colspan="9" class="py-2 ps-3">
+                                        <span class="fw-semibold fs-12 text-uppercase text-primary">
+                                            <i class="ri-stack-line me-1"></i>{{ $typeLabels[$currentType] ?? $currentType }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                @endif
                                 <tr>
                                     <td class="ps-3 text-muted fs-12">{{ $assets->firstItem() + $loop->index }}</td>
                                     <td>

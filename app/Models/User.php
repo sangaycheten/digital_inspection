@@ -15,7 +15,7 @@ use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['name', 'email', 'password', 'email_verified_at', 'created_by', 'updated_by', 'client_id', 'avatar'])]
+#[Fillable(['name', 'email', 'password', 'has_password', 'email_verified_at', 'credentials_sent_at', 'created_by', 'updated_by', 'client_id', 'avatar', 'timezone'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -55,8 +55,10 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
+            'email_verified_at'    => 'datetime',
+            'credentials_sent_at'  => 'datetime',
+            'password'             => 'hashed',
+            'has_password'         => 'boolean',
         ];
     }
 

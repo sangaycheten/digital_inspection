@@ -10,7 +10,7 @@ class Building extends Model
 {
     use SoftDeletes, HasUuids;
 
-    protected $fillable = ['site_id', 'name_or_level', 'roof_zones'];
+    protected $fillable = ['site_id', 'building_code', 'name_or_level', 'roof_zones'];
 
     protected $casts = ['roof_zones' => 'array'];
 

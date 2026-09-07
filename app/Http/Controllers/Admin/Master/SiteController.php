@@ -33,7 +33,19 @@ class SiteController extends Controller
             'latitude'   => ['nullable', 'numeric', 'between:-90,90'],
             'longitude'  => ['nullable', 'numeric', 'between:-180,180'],
             'site_notes' => ['nullable', 'string'],
+            'timezone'   => ['required', 'string', 'timezone:all'],
         ]);
+
+        if (!empty($data['latitude']) && !empty($data['longitude'])) {
+            $exists = Site::where('latitude', $data['latitude'])
+                          ->where('longitude', $data['longitude'])
+                          ->exists();
+            if ($exists) {
+                return back()->withInput()->withErrors([
+                    'latitude' => 'A site is already registered at this exact location.',
+                ]);
+            }
+        }
 
         $site = Site::create($data);
 
@@ -55,7 +67,20 @@ class SiteController extends Controller
             'latitude'   => ['nullable', 'numeric', 'between:-90,90'],
             'longitude'  => ['nullable', 'numeric', 'between:-180,180'],
             'site_notes' => ['nullable', 'string'],
+            'timezone'   => ['required', 'string', 'timezone:all'],
         ]);
+
+        if (!empty($data['latitude']) && !empty($data['longitude'])) {
+            $exists = Site::where('latitude', $data['latitude'])
+                          ->where('longitude', $data['longitude'])
+                          ->where('id', '!=', $site->id)
+                          ->exists();
+            if ($exists) {
+                return back()->withInput()->withErrors([
+                    'latitude' => 'Another site is already registered at this exact location.',
+                ]);
+            }
+        }
 
         $site->update($data);
 

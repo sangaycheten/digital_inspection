@@ -1,6 +1,14 @@
 <x-app-layout>
     <x-slot name="title">Edit Job</x-slot>
 
+    @push('styles')
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+    @endpush
+
+    @push('scripts')
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
+    @endpush
+
     @php
     $statusColors = [
         'new'                    => 'secondary',
@@ -83,14 +91,26 @@
                                     </option>
                                     @endforeach
                                 </select>
-                                @error('work_type')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                @error('work_type')<div class="invalid-feedback">{!! $message !!}</div>@enderror
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <label class="form-label">Scheduled Date</label>
                                 <input type="date" name="scheduled_date"
                                        class="form-control @error('scheduled_date') is-invalid @enderror"
                                        value="{{ old('scheduled_date', $job->scheduled_date?->format('Y-m-d')) }}">
                                 @error('scheduled_date')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Scheduled Time</label>
+                                <input type="time" name="scheduled_time"
+                                       class="form-control @error('scheduled_time') is-invalid @enderror"
+                                       value="{{ old('scheduled_time', $job->scheduled_time) }}">
+                                @error('scheduled_time')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                <div class="form-text">
+                                    <i class="ri-time-zone-line me-1"></i>Site time:
+                                    {{ \Carbon\Carbon::now($job->site->timezone)->format('T') }}
+                                    ({{ $job->site->timezone }})
+                                </div>
                             </div>
                             <div class="col-12">
                                 <label class="form-label">Scope Notes</label>
@@ -102,31 +122,63 @@
                     </div>
                 </div>
 
-                {{-- Buildings --}}
+                {{-- Technician-Building Assignment Matrix --}}
                 <div class="card mb-3">
                     <div class="card-header">
-                        <h6 class="card-title mb-0"><i class="ri-home-office-line me-2 text-primary"></i>Buildings in Scope</h6>
+                        <h6 class="card-title mb-0">
+                            <i class="ri-group-line me-2 text-primary"></i>Assign Technicians to Buildings
+                            <span class="text-danger">*</span>
+                        </h6>
                     </div>
                     <div class="card-body">
+                        @php $editAssignments = old('assignments', $assignments->toArray()); @endphp
                         @if($buildings->isEmpty())
-                        <p class="text-muted fs-13 mb-0">No buildings for this site.</p>
+                        <p class="text-muted fs-13 mb-0">No buildings registered for this site.</p>
+                        @elseif($technicians->isEmpty())
+                        <p class="text-muted fs-13 mb-0">No field technicians found.</p>
                         @else
-                        <div class="row g-2">
-                            @foreach($buildings as $building)
-                            <div class="col-md-6">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox"
-                                           name="building_ids[]" value="{{ $building->id }}"
-                                           id="bld{{ $building->id }}"
-                                           {{ in_array($building->id, old('building_ids', $job->buildings->pluck('id')->toArray())) ? 'checked' : '' }}>
-                                    <label class="form-check-label fs-13" for="bld{{ $building->id }}">
-                                        {{ $building->name_or_level }}
-                                    </label>
-                                </div>
-                            </div>
-                            @endforeach
+                        <div class="table-responsive">
+                            <table class="table table-bordered align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3" style="width:200px">Building</th>
+                                        <th>Assign Technicians</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($buildings as $building)
+                                    @php
+                                        $alreadyDone   = $job->work_type === 'first_inspection' && in_array($building->id, $firstInspectedBuildingIds->all());
+                                        $selectedTechs = $editAssignments[$building->id] ?? [];
+                                    @endphp
+                                    <tr>
+                                        <td class="ps-3 fw-medium fs-13">{{ $building->name_or_level }}</td>
+                                        <td>
+                                            @if($alreadyDone)
+                                            <span class="badge bg-success-subtle text-success fs-12">
+                                                <i class="ri-checkbox-circle-line me-1"></i>First Inspection Completed
+                                            </span>
+                                            @else
+                                            <select name="assignments[{{ $building->id }}][]"
+                                                    id="techSelect{{ $building->id }}"
+                                                    class="form-select tech-multiselect"
+                                                    multiple>
+                                                @foreach($technicians as $tech)
+                                                <option value="{{ $tech->id }}"
+                                                    {{ in_array($tech->id, $selectedTechs) ? 'selected' : '' }}>
+                                                    {{ $tech->name }}
+                                                </option>
+                                                @endforeach
+                                            </select>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
                         </div>
                         @endif
+                        @error('assignments')<div class="text-danger fs-12 mt-1">{{ $message }}</div>@enderror
                     </div>
                 </div>
 
@@ -165,33 +217,6 @@
                     </div>
                 </div>
 
-                {{-- Assign Technicians --}}
-                <div class="card mb-3">
-                    <div class="card-header">
-                        <h6 class="card-title mb-0"><i class="ri-user-star-line me-2 text-primary"></i>Technicians</h6>
-                    </div>
-                    <div class="card-body">
-                        @php $assignedIds = $job->technicians->pluck('id')->toArray(); @endphp
-                        @if($technicians->isEmpty())
-                        <p class="text-muted fs-13 mb-0">No field technicians found.</p>
-                        @else
-                        <div class="vstack gap-2">
-                            @foreach($technicians as $tech)
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox"
-                                       name="technician_ids[]" value="{{ $tech->id }}"
-                                       id="tech{{ $tech->id }}"
-                                       {{ in_array($tech->id, old('technician_ids', $assignedIds)) ? 'checked' : '' }}>
-                                <label class="form-check-label fs-13" for="tech{{ $tech->id }}">
-                                    {{ $tech->name }}
-                                </label>
-                            </div>
-                            @endforeach
-                        </div>
-                        @endif
-                    </div>
-                </div>
-
                 <div class="d-flex gap-2">
                     <button type="submit" class="btn btn-primary flex-grow-1">
                         <i class="ri-save-line me-1"></i> Save Changes
@@ -199,8 +224,31 @@
                     <a href="{{ route('admin.jobs.show', $job) }}" class="btn btn-light">Cancel</a>
                 </div>
 
+                @if(in_array($job->status, ['issued', 'closed']))
+                <div class="mt-2">
+                    <a href="{{ route('admin.jobs.certificate', $job) }}" class="btn btn-success w-100">
+                        <i class="ri-file-download-line me-1"></i>Download Certificate
+                    </a>
+                </div>
+                @endif
+
             </div>
         </div>
     </form>
+
+    @push('scripts')
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('.tech-multiselect').forEach(function (el) {
+            new TomSelect(el, {
+                plugins: ['remove_button'],
+                placeholder: 'Select technicians...',
+                create: false,
+                maxOptions: null,
+            });
+        });
+    });
+    </script>
+    @endpush
 
 </x-app-layout>

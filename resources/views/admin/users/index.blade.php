@@ -8,6 +8,7 @@
                 <div class="page-title-right">
                     <ol class="breadcrumb m-0">
                         <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}">Home</a></li>
+                        <li class="breadcrumb-item">User & Role Management</li>
                         <li class="breadcrumb-item active">Users</li>
                     </ol>
                 </div>
@@ -24,9 +25,11 @@
                         All Users
                         <span class="badge bg-primary-subtle text-primary ms-1">{{ $users->total() }}</span>
                     </h5>
+                    @can('add users')
                     <a href="{{ route('admin.users.create') }}" class="btn btn-primary btn-sm">
                         <i class="ri-user-add-line align-middle me-1"></i> Add User
                     </a>
+                    @endcan
                 </div>
                 <div class="card-body border-bottom pb-3">
                     <form method="GET" action="{{ route('admin.users.index') }}" class="row g-2 align-items-end">
@@ -81,8 +84,9 @@
                                     <th>Name</th>
                                     <th>Email</th>
                                     <th>Role</th>
-                                    <th>Client</th>
+                                    <th>Site</th>
                                     <th>Verified</th>
+                                    <th>Password</th>
                                     <th>Created</th>
                                     <th>Last Edited</th>
                                     <th>Actions</th>
@@ -120,24 +124,11 @@
                                         </td>
                                         <td>
                                             @if($user->hasRole('client-user') && $user->client)
-                                                <span class="badge bg-success-subtle text-success">
-                                                    {{ $user->client->custom_client_code }}
-                                                </span>
-                                                <span class="fs-12 ms-1">{{ $user->client->name }}</span>
-                                                @if($user->sites->isNotEmpty())
-                                                    <div class="mt-1">
-                                                        @foreach($user->sites as $site)
-                                                            <span class="badge bg-info-subtle text-info fs-10 me-1">{{ Str::limit($site->address, 30) }}</span>
-                                                        @endforeach
-                                                    </div>
-                                                @endif
+                                                @php $siteCount = $user->sites->count(); @endphp
+                                                <span class="badge bg-info-subtle text-info">{{ $siteCount }} {{ Str::plural('Site', $siteCount) }}</span>
                                             @elseif($user->hasRole('field-technician') && $user->sites->isNotEmpty())
-                                                @foreach($user->sites as $site)
-                                                    <div class="fs-12">
-                                                        <span class="badge bg-secondary-subtle text-secondary fs-10 me-1">{{ $site->client?->custom_client_code }}</span>
-                                                        {{ Str::limit($site->address, 35) }}
-                                                    </div>
-                                                @endforeach
+                                                @php $siteCount = $user->sites->count(); @endphp
+                                                <span class="badge bg-secondary-subtle text-secondary">{{ $siteCount }} {{ Str::plural('Site', $siteCount) }}</span>
                                             @else
                                                 <span class="text-muted fs-12">—</span>
                                             @endif
@@ -147,6 +138,17 @@
                                                 <span class="badge bg-success-subtle text-success">Verified</span>
                                             @else
                                                 <span class="badge bg-warning-subtle text-warning">Unverified</span>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            @if ($user->has_password)
+                                                <span class="badge bg-success-subtle text-success" title="Password has been set">
+                                                    <i class="ri-lock-password-line me-1"></i>Set
+                                                </span>
+                                            @else
+                                                <span class="badge bg-danger-subtle text-danger" title="No password — send credentials to enable login">
+                                                    <i class="ri-lock-unlock-line me-1"></i>Not Set
+                                                </span>
                                             @endif
                                         </td>
                                         <td>
@@ -167,11 +169,21 @@
                                         </td>
                                         <td>
                                             <div class="hstack gap-2">
+                                                @can('edit users')
                                                 <a href="{{ route('admin.users.edit', $user) }}"
                                                    class="btn btn-sm btn-outline-primary"
                                                    title="Edit">
                                                     <i class="ri-edit-line"></i>
                                                 </a>
+                                                <button type="button"
+                                                        class="btn btn-sm {{ $user->credentials_sent_at ? 'btn-info' : 'btn-outline-info' }}"
+                                                        title="{{ $user->credentials_sent_at ? 'Credentials sent ' . $user->credentials_sent_at->diffForHumans() : 'Send Credentials' }}"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#credentialsModal{{ $user->id }}">
+                                                    <i class="ri-mail-send-line"></i>
+                                                </button>
+                                                @endcan
+                                                @can('delete users')
                                                 @if($user->id !== request()->user()?->id)
                                                 <button type="button"
                                                         class="btn btn-sm btn-outline-danger"
@@ -181,6 +193,68 @@
                                                     <i class="ri-delete-bin-line"></i>
                                                 </button>
                                                 @endif
+                                                @endcan
+                                            </div>
+
+                                            {{-- Send Credentials Modal --}}
+                                            <div class="modal fade" id="credentialsModal{{ $user->id }}" tabindex="-1" aria-hidden="true">
+                                                <div class="modal-dialog modal-dialog-centered">
+                                                    <div class="modal-content">
+                                                        <div class="modal-header">
+                                                            <h5 class="modal-title">
+                                                                <i class="ri-mail-send-line me-2 text-info"></i>Send Login Credentials
+                                                            </h5>
+                                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                        </div>
+                                                        <div class="modal-body">
+                                                            <p class="text-muted fs-13 mb-3">The following email will be sent to the user:</p>
+
+                                                            <div class="border rounded p-3 bg-light">
+                                                                <div class="mb-2 d-flex gap-2">
+                                                                    <span class="text-muted fs-12" style="min-width:60px;">To</span>
+                                                                    <span class="fw-medium fs-13">{{ $user->email }}</span>
+                                                                </div>
+                                                                <div class="mb-3 d-flex gap-2">
+                                                                    <span class="text-muted fs-12" style="min-width:60px;">Subject</span>
+                                                                    <span class="fs-13">Your Login Credentials – {{ config('app.name') }}</span>
+                                                                </div>
+                                                                <hr class="my-2">
+                                                                <div class="fs-13 text-muted mb-2">Email body will include:</div>
+                                                                <ul class="fs-13 mb-0 ps-3">
+                                                                    <li>Greeting to <strong>{{ $user->name }}</strong></li>
+                                                                    <li>Login email: <span class="font-monospace">{{ $user->email }}</span></li>
+                                                                    <li>New temporary password <span class="text-warning">(auto-generated)</span></li>
+                                                                    <li>Login link to the portal</li>
+                                                                </ul>
+                                                            </div>
+
+                                                            @if($user->credentials_sent_at)
+                                                            <div class="alert alert-info alert-border-left mt-3 mb-0 py-2">
+                                                                <i class="ri-time-line me-1"></i>
+                                                                <small>Last sent <strong>{{ $user->credentials_sent_at->diffForHumans() }}</strong> — {{ $user->credentials_sent_at->format('d M Y, H:i') }}</small>
+                                                            </div>
+                                                            @else
+                                                            <div class="alert alert-warning alert-border-left mt-3 mb-0 py-2">
+                                                                <i class="ri-alert-line me-1"></i>
+                                                                <small>Credentials have <strong>never</strong> been sent to this user.</small>
+                                                            </div>
+                                                            @endif
+                                                            <div class="alert alert-warning alert-border-left mt-2 mb-0 py-2">
+                                                                <i class="ri-lock-password-line me-1"></i>
+                                                                <small>This will reset the user's current password.</small>
+                                                            </div>
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                                                            <form method="POST" action="{{ route('admin.users.send-credentials', $user) }}">
+                                                                @csrf
+                                                                <button type="submit" class="btn btn-info">
+                                                                    <i class="ri-send-plane-line me-1"></i> Send Credentials
+                                                                </button>
+                                                            </form>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
 
                                             @if($user->id !== request()->user()?->id)
@@ -277,6 +351,7 @@
                                     </td>
                                     <td>{{ $user->deleted_at->format('d M Y, H:i') }}</td>
                                     <td>
+                                        @can('edit users')
                                         <form method="POST" action="{{ route('admin.users.restore', $user->id) }}">
                                             @csrf
                                             @method('PATCH')
@@ -284,6 +359,7 @@
                                                 <i class="ri-restart-line me-1"></i> Restore
                                             </button>
                                         </form>
+                                        @endcan
                                     </td>
                                 </tr>
                                 @endforeach

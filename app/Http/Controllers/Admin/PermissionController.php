@@ -3,22 +3,29 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\MenuSequence;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 class PermissionController extends Controller
 {
     public function index(): View
     {
-        $permissionGroups = Permission::all()
+        $moduleOrder  = config('navigation.module_order');
+        $moduleLabels = config('navigation.module_labels');
+
+        $permissionGroups = Permission::with('roles')->get()
             ->groupBy(fn ($p) => $p->module ?? 'Ungrouped')
-            ->sortKeys();
+            ->sortBy(fn ($_, $module) => ($pos = array_search($module, $moduleOrder)) !== false ? $pos : 999);
 
-        $modules = $permissionGroups->keys()->sort()->values();
+        $modules = $permissionGroups->keys()->values();
+        $roles   = Role::with('permissions')->orderBy('name')->get();
 
-        return view('admin.permissions.index', compact('permissionGroups', 'modules'));
+        return view('admin.permissions.index', compact('permissionGroups', 'modules', 'moduleLabels', 'roles'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -48,8 +55,69 @@ class PermissionController extends Controller
 
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
+        // Auto-create a disabled menu item so the admin can enable and configure it
+        $menuKey  = Str::slug($permission->name);
+        $maxSeq   = MenuSequence::where('role', 'system-administrator')->whereNull('parent_key')->max('sequence') ?? 0;
+        MenuSequence::firstOrCreate(
+            ['role' => 'system-administrator', 'key' => $menuKey, 'parent_key' => null],
+            ['section' => 'Operations', 'permission' => $permission->name, 'sequence' => $maxSeq + 1, 'enabled' => false]
+        );
+
         return redirect()->route('admin.permissions.index')
-            ->with('success', "Permission \"{$permission->name}\" created successfully.");
+            ->with('success', "Permission \"{$permission->name}\" created. A disabled menu item was added — enable it in Menu Elements when ready.");
+    }
+
+    public function update(Request $request, Permission $permission): RedirectResponse
+    {
+        $request->validate([
+            'name'       => ['required', 'string', 'max:100', 'unique:permissions,name,' . $permission->id],
+            'module'     => ['required', 'string', 'max:100'],
+            'new_module' => ['required_if:module,__new__', 'nullable', 'string', 'max:100'],
+        ]);
+
+        $module  = $request->module === '__new__' ? trim($request->new_module) : trim($request->module);
+        $oldName = $permission->name;
+        $newName = strtolower(trim($request->name));
+
+        $permission->update(['name' => $newName, 'module' => $module]);
+
+        if ($oldName !== $newName) {
+            $this->syncPermissionNameInFiles($oldName, $newName);
+        }
+
+        activity()
+            ->causedBy(request()->user())
+            ->performedOn($permission)
+            ->event('updated')
+            ->withProperties([
+                'old'        => ['name' => $oldName, 'module' => $permission->getOriginal('module')],
+                'attributes' => ['name' => $newName, 'module' => $module],
+            ])
+            ->log("Permission updated: {$oldName} → {$newName}");
+
+        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+
+        return redirect()->route('admin.permissions.index')
+            ->with('success', "Permission renamed from \"{$oldName}\" to \"{$newName}\" successfully.");
+    }
+
+    private function syncPermissionNameInFiles(string $oldName, string $newName): void
+    {
+        $autoLabel    = \Illuminate\Support\Str::title($oldName);
+        $newAutoLabel = \Illuminate\Support\Str::title($newName);
+
+        // Update MenuSequence rows (DB-driven sidebar for system-administrator)
+        \App\Models\MenuSequence::where('permission', $oldName)
+            ->each(function ($seq) use ($newName, $autoLabel, $newAutoLabel) {
+                $updates = ['permission' => $newName];
+
+                // Only update label if it was auto-derived from the old permission name
+                if ($seq->label === $autoLabel || $seq->label === $newName) {
+                    $updates['label'] = $newAutoLabel;
+                }
+
+                $seq->update($updates);
+            });
     }
 
     public function destroy(Permission $permission): RedirectResponse
