@@ -139,43 +139,7 @@
                             <div class="form-text text-muted mt-1">Select one or more sites this user can access.</div>
                         </div>
 
-                        <hr class="my-4">
-                        <p class="text-muted fs-13 mb-3">
-                            <i class="ri-lock-line me-1"></i>
-                            Leave password fields blank to keep the current password.
-                        </p>
-
-                        <div class="mb-3">
-                            <label for="password" class="form-label">New Password</label>
-                            <div class="input-group">
-                                <input type="password" class="form-control @error('password') is-invalid @enderror"
-                                       id="password" name="password" autocomplete="new-password"
-                                       placeholder="Enter new password (optional)">
-                                <button class="btn btn-outline-secondary" type="button"
-                                        onclick="togglePwd('password', this)" tabindex="-1">
-                                    <i class="ri-eye-line"></i>
-                                </button>
-                                @error('password')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                            <div class="form-text">Min 8 characters with uppercase, lowercase, number, and symbol.</div>
-                        </div>
-
-                        <div class="mb-4">
-                            <label for="password_confirmation" class="form-label">Confirm New Password</label>
-                            <div class="input-group">
-                                <input type="password" class="form-control"
-                                       id="password_confirmation" name="password_confirmation"
-                                       placeholder="Confirm new password">
-                                <button class="btn btn-outline-secondary" type="button"
-                                        onclick="togglePwd('password_confirmation', this)" tabindex="-1">
-                                    <i class="ri-eye-line"></i>
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="mb-4">
+                                        <div class="mb-4">
                             <label for="timezone" class="form-label">Timezone <span class="text-danger">*</span></label>
                             <select class="form-select @error('timezone') is-invalid @enderror"
                                     id="timezone" name="timezone" required>
@@ -201,6 +165,110 @@
             </div>
         </div>
     </div>
+
+    {{-- Password Management Card --}}
+    @can('edit users')
+    <div class="row justify-content-center">
+        <div class="col-xxl-6 col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="ri-lock-password-line me-2 text-warning"></i>Password Management
+                    </h5>
+                </div>
+                <div class="card-body">
+
+                    @if(session('pwd_success'))
+                    <div class="alert alert-success alert-border-left alert-dismissible fade show py-2 mb-3" role="alert">
+                        <i class="ri-checkbox-circle-line me-2"></i>{{ session('pwd_success') }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    @endif
+                    @if(session('pwd_error'))
+                    <div class="alert alert-danger alert-border-left alert-dismissible fade show py-2 mb-3" role="alert">
+                        <i class="ri-error-warning-line me-2"></i>{{ session('pwd_error') }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    @endif
+
+                    {{-- Option 1: Set password manually --}}
+                    <form method="POST" action="{{ route('admin.users.reset-password', $user) }}">
+                        @csrf
+                        @method('PUT')
+
+                        <p class="text-muted fs-13 mb-3">Set a new password directly for this user.</p>
+
+                        <div class="mb-3">
+                            <label for="new_password" class="form-label">New Password <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <input type="password"
+                                       class="form-control @error('new_password') is-invalid @enderror"
+                                       id="new_password" name="new_password"
+                                       autocomplete="new-password"
+                                       placeholder="Enter new password">
+                                <button class="btn btn-outline-secondary" type="button"
+                                        onclick="togglePwd('new_password', this)" tabindex="-1">
+                                    <i class="ri-eye-line"></i>
+                                </button>
+                                @error('new_password')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+                            <div class="form-text">Min 8 characters with uppercase, lowercase, number, and symbol.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="new_password_confirmation" class="form-label">Confirm New Password <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <input type="password"
+                                       class="form-control"
+                                       id="new_password_confirmation" name="new_password_confirmation"
+                                       placeholder="Confirm new password">
+                                <button class="btn btn-outline-secondary" type="button"
+                                        onclick="togglePwd('new_password_confirmation', this)" tabindex="-1">
+                                    <i class="ri-eye-line"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox"
+                                       id="force_password_change" name="force_password_change"
+                                       value="1" checked>
+                                <label class="form-check-label fs-13" for="force_password_change">
+                                    Require user to change this password on next login
+                                </label>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-warning">
+                            <i class="ri-lock-password-line me-1"></i> Reset Password
+                        </button>
+                    </form>
+
+                    <hr class="my-4">
+
+                    {{-- Option 2: Send credentials email --}}
+                    <p class="text-muted fs-13 mb-2">Or send a new temporary password to the user's email:</p>
+                    @if($user->credentials_sent_at)
+                    <p class="fs-12 text-muted mb-3">
+                        <i class="ri-time-line me-1"></i>Last sent {{ $user->credentials_sent_at->diffForHumans() }}
+                        ({{ $user->credentials_sent_at->format('d M Y, H:i') }})
+                    </p>
+                    @endif
+                    <form method="POST" action="{{ route('admin.users.send-credentials', $user) }}">
+                        @csrf
+                        <button type="submit" class="btn btn-outline-info">
+                            <i class="ri-mail-send-line me-1"></i> Send Credentials Email
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    @endcan
+
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
 <script>

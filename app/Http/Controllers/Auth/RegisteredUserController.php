@@ -271,6 +271,28 @@ class RegisteredUserController extends Controller
         return back()->with('success', "Login credentials sent to {$user->email}.");
     }
 
+    public function resetPassword(Request $request, User $user): RedirectResponse
+    {
+        $request->validate([
+            'new_password' => ['required', 'confirmed', Rules\Password::defaults()],
+        ]);
+
+        $user->update([
+            'password'              => Hash::make($request->new_password),
+            'has_password'          => true,
+            'force_password_change' => $request->boolean('force_password_change'),
+        ]);
+
+        activity()->useLog('user')
+            ->causedBy($request->user())
+            ->performedOn($user)
+            ->event('password_reset')
+            ->log("Password reset by admin for: {$user->email}");
+
+        return redirect()->route('admin.users.edit', $user)
+            ->with('pwd_success', "Password for {$user->name} has been reset successfully.");
+    }
+
     public function restore(int $id): RedirectResponse
     {
         $user = User::withTrashed()->findOrFail($id);

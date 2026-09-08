@@ -114,6 +114,7 @@ Route::middleware(['auth', 'role:system-administrator|manager'])->prefix('admin'
     Route::delete('/users/{user}',          [RegisteredUserController::class, 'destroy'])        ->name('users.destroy')          ->middleware('permission:delete users');
     Route::patch('/users/{user}/restore',   [RegisteredUserController::class, 'restore'])        ->name('users.restore')          ->middleware('permission:edit users')->withTrashed();
     Route::post('/users/{user}/send-credentials', [RegisteredUserController::class, 'sendCredentials'])->name('users.send-credentials')->middleware('permission:edit users');
+    Route::put('/users/{user}/reset-password',   [RegisteredUserController::class, 'resetPassword'])  ->name('users.reset-password')  ->middleware('permission:edit users');
 
     // Roles (RBAC matrix)
     Route::get('/rbac',  [RbacController::class, 'index']) ->name('rbac.index')  ->middleware('permission:view roles');
