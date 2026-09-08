@@ -257,9 +257,10 @@
                         ({{ $user->credentials_sent_at->format('d M Y, H:i') }})
                     </p>
                     @endif
-                    <form method="POST" action="{{ route('admin.users.send-credentials', $user) }}">
+                    <form id="sendCredentialsForm" method="POST" action="{{ route('admin.users.send-credentials', $user) }}">
                         @csrf
-                        <button type="submit" class="btn btn-outline-info">
+                        <button type="button" class="btn btn-outline-info"
+                                data-bs-toggle="modal" data-bs-target="#sendCredentialsConfirmModal">
                             <i class="ri-mail-send-line me-1"></i> Send Credentials Email
                         </button>
                     </form>
@@ -268,6 +269,54 @@
         </div>
     </div>
     @endcan
+
+    {{-- Send Credentials Confirmation Modal --}}
+    <div class="modal fade" id="sendCredentialsConfirmModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="ri-mail-send-line me-2 text-info"></i>Send Login Credentials
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted fs-13 mb-3">The following email will be sent to the user:</p>
+
+                    <div class="border rounded p-3 bg-light">
+                        <div class="mb-2 d-flex gap-2">
+                            <span class="text-muted fs-12" style="min-width:60px;">To</span>
+                            <span class="fw-medium fs-13">{{ $user->email }}</span>
+                        </div>
+                        <div class="mb-3 d-flex gap-2">
+                            <span class="text-muted fs-12" style="min-width:60px;">Subject</span>
+                            <span class="fs-13">Your Login Credentials – {{ config('app.name') }}</span>
+                        </div>
+                        <hr class="my-2">
+                        <div class="fs-13 text-muted mb-2">Email body will include:</div>
+                        <ul class="fs-13 mb-0 ps-3">
+                            <li>Greeting to <strong>{{ $user->name }}</strong></li>
+                            <li>Login email: <span class="font-monospace">{{ $user->email }}</span></li>
+                            <li>New temporary password <span class="text-warning">(auto-generated)</span></li>
+                            <li>Login link to the portal</li>
+                        </ul>
+                    </div>
+
+                    <div class="alert alert-warning alert-border-left mt-3 mb-0 py-2">
+                        <i class="ri-lock-password-line me-1"></i>
+                        <small>This will <strong>reset the user's current password</strong> and require them to set a new one on next login.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-info"
+                            onclick="document.getElementById('sendCredentialsForm').submit()">
+                        <i class="ri-send-plane-line me-1"></i> Send Credentials
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
