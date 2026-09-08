@@ -25,6 +25,12 @@ class ChangePasswordController extends Controller
 
         $user = $request->user();
 
+        if (Hash::check($request->password, $user->password)) {
+            return back()->withErrors([
+                'password' => 'Your new password cannot be the same as the temporary password that was sent to you. Please choose a different password.',
+            ]);
+        }
+
         $user->update([
             'password'              => Hash::make($request->password),
             'force_password_change' => false,
