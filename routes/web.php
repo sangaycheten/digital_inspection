@@ -28,10 +28,17 @@ use App\Http\Controllers\Client\ReportController as ClientReportController;
 use App\Http\Controllers\Client\FeedbackController as ClientFeedbackController;
 use App\Http\Controllers\Admin\FeedbackController as AdminFeedbackController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Auth\ChangePasswordController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('welcome');
+});
+
+// Force password change — accessible to any authenticated user
+Route::middleware('auth')->group(function () {
+    Route::get('/change-password', [ChangePasswordController::class, 'show'])->name('password.change');
+    Route::post('/change-password', [ChangePasswordController::class, 'update'])->name('password.change.update');
 });
 
 // System Administrator — dashboard and questionnaires (admin-only)

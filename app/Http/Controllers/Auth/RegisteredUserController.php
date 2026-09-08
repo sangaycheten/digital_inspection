@@ -249,9 +249,10 @@ class RegisteredUserController extends Controller
     {
         $temporaryPassword = Str::random(10);
         $user->update([
-            'password'            => Hash::make($temporaryPassword),
-            'has_password'        => true,
-            'credentials_sent_at' => now(),
+            'password'              => Hash::make($temporaryPassword),
+            'has_password'          => true,
+            'credentials_sent_at'   => now(),
+            'force_password_change' => true,
         ]);
 
         try {
