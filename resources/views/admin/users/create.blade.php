@@ -127,8 +127,14 @@
                                     Set a password now
                                 </label>
                             </div>
-                            <div class="form-text mt-1">
+                            <div id="pwd_hint_off" class="form-text mt-1" @if(old('set_password')) style="display:none" @endif>
                                 Leave off to create the account without a password — you can send login credentials later.
+                            </div>
+                            <div id="pwd_hint_on" class="mt-2" @if(!old('set_password')) style="display:none" @endif>
+                                <div class="alert alert-info alert-border-left py-2 mb-0 fs-13">
+                                    <i class="ri-mail-send-line me-1"></i>
+                                    Credentials email will be sent automatically to the user with this password. The user will be required to change it on first login.
+                                </div>
                             </div>
                         </div>
 
@@ -320,9 +326,9 @@ function applyIndeterminate() {
 }
 
 function togglePasswordFields(show) {
-    const wrap = document.getElementById('passwordFields');
-    wrap.style.display = show ? '' : 'none';
-    // Clear values when hiding so they don't submit
+    document.getElementById('passwordFields').style.display = show ? '' : 'none';
+    document.getElementById('pwd_hint_off').style.display   = show ? 'none' : '';
+    document.getElementById('pwd_hint_on').style.display    = show ? '' : 'none';
     if (!show) {
         document.getElementById('password').value = '';
         document.getElementById('password_confirmation').value = '';

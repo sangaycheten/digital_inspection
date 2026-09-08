@@ -119,8 +119,23 @@ class RegisteredUserController extends Controller
             ->withProperties(['attributes' => $logProps])
             ->log("User created: {$user->name}");
 
+        // When a password was set manually, email it immediately while the plain text is still available.
+        $mailMessage = '';
+        if ($settingPassword) {
+            try {
+                Mail::to($user->email)->send(new UserCredentialsMail($user, $request->password));
+                $user->update([
+                    'credentials_sent_at'   => now(),
+                    'force_password_change' => true,
+                ]);
+                $mailMessage = " Credentials have been emailed to {$user->email}.";
+            } catch (\Throwable) {
+                $mailMessage = " Warning: credentials email could not be sent — please use the Send Credentials button.";
+            }
+        }
+
         return redirect()->route('admin.users.index')
-            ->with('success', "User {$user->name} created successfully.");
+            ->with('success', "User {$user->name} created successfully.{$mailMessage}");
     }
 
     public function edit(User $user): View

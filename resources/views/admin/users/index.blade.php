@@ -202,7 +202,7 @@
                                                     <div class="modal-content">
                                                         <div class="modal-header">
                                                             <h5 class="modal-title">
-                                                                <i class="ri-mail-send-line me-2 text-info"></i>Send Login Credentials
+                                                                <i class="ri-mail-send-line me-2 text-info"></i>Reset &amp; Send New Credentials
                                                             </h5>
                                                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                                         </div>
@@ -223,7 +223,7 @@
                                                                 <ul class="fs-13 mb-0 ps-3">
                                                                     <li>Greeting to <strong>{{ $user->name }}</strong></li>
                                                                     <li>Login email: <span class="font-monospace">{{ $user->email }}</span></li>
-                                                                    <li>New temporary password <span class="text-warning">(auto-generated)</span></li>
+                                                                    <li>A <strong>new</strong> auto-generated temporary password</li>
                                                                     <li>Login link to the portal</li>
                                                                 </ul>
                                                             </div>
@@ -233,15 +233,10 @@
                                                                 <i class="ri-time-line me-1"></i>
                                                                 <small>Last sent <strong>{{ $user->credentials_sent_at->diffForHumans() }}</strong> — {{ $user->credentials_sent_at->format('d M Y, H:i') }}</small>
                                                             </div>
-                                                            @else
-                                                            <div class="alert alert-warning alert-border-left mt-3 mb-0 py-2">
-                                                                <i class="ri-alert-line me-1"></i>
-                                                                <small>Credentials have <strong>never</strong> been sent to this user.</small>
-                                                            </div>
                                                             @endif
-                                                            <div class="alert alert-warning alert-border-left mt-2 mb-0 py-2">
-                                                                <i class="ri-lock-password-line me-1"></i>
-                                                                <small>This will reset the user's current password.</small>
+                                                            <div class="alert alert-danger alert-border-left mt-2 mb-0 py-2">
+                                                                <i class="ri-alert-line me-1"></i>
+                                                                <small>This will <strong>replace the user's current password</strong> with a new randomly generated one.</small>
                                                             </div>
                                                         </div>
                                                         <div class="modal-footer">
@@ -249,7 +244,7 @@
                                                             <form method="POST" action="{{ route('admin.users.send-credentials', $user) }}">
                                                                 @csrf
                                                                 <button type="submit" class="btn btn-info">
-                                                                    <i class="ri-send-plane-line me-1"></i> Send Credentials
+                                                                    <i class="ri-send-plane-line me-1"></i> Reset &amp; Send
                                                                 </button>
                                                             </form>
                                                         </div>

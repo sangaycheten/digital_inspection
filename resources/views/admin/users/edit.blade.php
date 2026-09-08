@@ -276,7 +276,7 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">
-                        <i class="ri-mail-send-line me-2 text-info"></i>Send Login Credentials
+                        <i class="ri-mail-send-line me-2 text-info"></i>Reset &amp; Send New Credentials
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
@@ -297,21 +297,21 @@
                         <ul class="fs-13 mb-0 ps-3">
                             <li>Greeting to <strong>{{ $user->name }}</strong></li>
                             <li>Login email: <span class="font-monospace">{{ $user->email }}</span></li>
-                            <li>New temporary password <span class="text-warning">(auto-generated)</span></li>
+                            <li>A <strong>new</strong> auto-generated temporary password</li>
                             <li>Login link to the portal</li>
                         </ul>
                     </div>
 
-                    <div class="alert alert-warning alert-border-left mt-3 mb-0 py-2">
-                        <i class="ri-lock-password-line me-1"></i>
-                        <small>This will <strong>reset the user's current password</strong> and require them to set a new one on next login.</small>
+                    <div class="alert alert-danger alert-border-left mt-3 mb-0 py-2">
+                        <i class="ri-alert-line me-1"></i>
+                        <small>This will <strong>replace the user's current password</strong> with a new randomly generated one and require them to set a new one on next login.</small>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-info"
                             onclick="document.getElementById('sendCredentialsForm').submit()">
-                        <i class="ri-send-plane-line me-1"></i> Send Credentials
+                        <i class="ri-send-plane-line me-1"></i> Reset &amp; Send
                     </button>
                 </div>
             </div>
