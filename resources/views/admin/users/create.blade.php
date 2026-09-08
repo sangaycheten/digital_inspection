@@ -140,11 +140,17 @@
 
                         <div id="passwordFields" @if(!old('set_password')) style="display:none" @endif>
                             <div class="mb-3">
-                                <label for="password" class="form-label">Password <span class="text-danger">*</span></label>
+                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                    <label for="password" class="form-label mb-0">Password <span class="text-danger">*</span></label>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                                            onclick="generatePassword()" tabindex="-1">
+                                        <i class="ri-refresh-line me-1"></i> Auto Generate
+                                    </button>
+                                </div>
                                 <div class="input-group">
                                     <input type="password" class="form-control @error('password') is-invalid @enderror"
                                            id="password" name="password"
-                                           placeholder="Enter password">
+                                           placeholder="Enter or auto-generate a password">
                                     <button class="btn btn-outline-secondary" type="button"
                                             onclick="togglePwd('password', this)" tabindex="-1">
                                         <i class="ri-eye-line"></i>
@@ -167,6 +173,15 @@
                                         <i class="ri-eye-line"></i>
                                     </button>
                                 </div>
+                            </div>
+
+                            <div id="generatedPwdAlert" class="alert alert-success alert-border-left py-2 fs-13 mb-3" style="display:none;">
+                                <i class="ri-key-2-line me-1"></i>
+                                Generated password: <strong id="generatedPwdDisplay" class="font-monospace ms-1"></strong>
+                                <button type="button" class="btn btn-link btn-sm p-0 ms-2 text-success"
+                                        onclick="copyGeneratedPwd(this)" title="Copy to clipboard">
+                                    <i class="ri-clipboard-line"></i>
+                                </button>
                             </div>
                         </div>
 
@@ -325,6 +340,52 @@ function applyIndeterminate() {
     document.querySelectorAll('[data-indet="1"]').forEach(el => el.indeterminate = true);
 }
 
+function generatePassword() {
+    const upper   = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const lower   = 'abcdefghijklmnopqrstuvwxyz';
+    const digits  = '0123456789';
+    const symbols = '!@#$%^&*()-_=+[]{}';
+    const all     = upper + lower + digits + symbols;
+
+    // Guarantee at least one of each required character type
+    let pwd = [
+        upper  [Math.floor(Math.random() * upper.length)],
+        lower  [Math.floor(Math.random() * lower.length)],
+        digits [Math.floor(Math.random() * digits.length)],
+        symbols[Math.floor(Math.random() * symbols.length)],
+    ];
+    for (let i = 4; i < 12; i++) {
+        pwd.push(all[Math.floor(Math.random() * all.length)]);
+    }
+    // Shuffle so the guaranteed chars aren't always at the front
+    pwd = pwd.sort(() => Math.random() - 0.5).join('');
+
+    const pwdEl    = document.getElementById('password');
+    const confEl   = document.getElementById('password_confirmation');
+    const alertEl  = document.getElementById('generatedPwdAlert');
+    const displayEl = document.getElementById('generatedPwdDisplay');
+
+    pwdEl.value  = pwd;
+    confEl.value = pwd;
+
+    // Show both fields as text so admin can verify
+    pwdEl.type  = 'text';
+    confEl.type = 'text';
+    pwdEl.closest('.input-group').querySelector('button i').className  = 'ri-eye-off-line';
+    confEl.closest('.input-group').querySelector('button i').className = 'ri-eye-off-line';
+
+    displayEl.textContent   = pwd;
+    alertEl.style.display   = '';
+}
+
+function copyGeneratedPwd(btn) {
+    const pwd = document.getElementById('generatedPwdDisplay').textContent;
+    navigator.clipboard.writeText(pwd).then(() => {
+        btn.innerHTML = '<i class="ri-check-line"></i>';
+        setTimeout(() => { btn.innerHTML = '<i class="ri-clipboard-line"></i>'; }, 2000);
+    });
+}
+
 function togglePasswordFields(show) {
     document.getElementById('passwordFields').style.display = show ? '' : 'none';
     document.getElementById('pwd_hint_off').style.display   = show ? 'none' : '';
@@ -332,6 +393,8 @@ function togglePasswordFields(show) {
     if (!show) {
         document.getElementById('password').value = '';
         document.getElementById('password_confirmation').value = '';
+        document.getElementById('generatedPwdAlert').style.display = 'none';
+        document.getElementById('generatedPwdDisplay').textContent = '';
     }
 }
 
