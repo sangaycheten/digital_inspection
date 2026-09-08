@@ -32,7 +32,7 @@
                 <label class="form-label" for="password">New Password <span class="text-danger">*</span></label>
                 <div class="position-relative auth-pass-inputgroup">
                     <input type="password"
-                           class="form-control pe-5 password-input @error('password') is-invalid @enderror"
+                           class="form-control pe-5 password-input"
                            id="password" name="password"
                            required autocomplete="new-password"
                            placeholder="Enter new password">
@@ -40,9 +40,6 @@
                             type="button">
                         <i class="ri-eye-fill align-middle"></i>
                     </button>
-                    @error('password')
-                        <div class="invalid-feedback">{{ $message }}</div>
-                    @enderror
                 </div>
             </div>
 
