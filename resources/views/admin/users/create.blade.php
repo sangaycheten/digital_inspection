@@ -344,7 +344,7 @@ function generatePassword() {
     const upper   = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const lower   = 'abcdefghijklmnopqrstuvwxyz';
     const digits  = '0123456789';
-    const symbols = '!@#$%^&*()-_=+[]{}';
+    const symbols = '!@#$%^*()-_=+[]{}';   // & < > excluded to avoid HTML encoding in emails
     const all     = upper + lower + digits + symbols;
 
     // Guarantee at least one of each required character type
