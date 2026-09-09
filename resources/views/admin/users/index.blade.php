@@ -243,7 +243,8 @@
                                                             <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
                                                             <form method="POST" action="{{ route('admin.users.send-credentials', $user) }}">
                                                                 @csrf
-                                                                <button type="submit" class="btn btn-info">
+                                                                <button type="submit" class="btn btn-info"
+                                                                        onclick="this.disabled=true; this.innerHTML='<span class=\'spinner-border spinner-border-sm me-1\'></span> Sending...'; this.form.submit();">
                                                                     <i class="ri-send-plane-line me-1"></i> Reset &amp; Send
                                                                 </button>
                                                             </form>

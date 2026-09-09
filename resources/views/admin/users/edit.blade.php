@@ -242,7 +242,8 @@
                             </div>
                         </div>
 
-                        <button type="submit" class="btn btn-warning">
+                        <button type="submit" class="btn btn-warning"
+                                onclick="this.disabled=true; this.innerHTML='<span class=\'spinner-border spinner-border-sm me-1\'></span> Resetting...'; this.form.submit();">
                             <i class="ri-lock-password-line me-1"></i> Reset Password
                         </button>
                     </form>
@@ -309,8 +310,8 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-info"
-                            onclick="document.getElementById('sendCredentialsForm').submit()">
+                    <button type="button" class="btn btn-info" id="confirmSendCredBtn"
+                            onclick="this.disabled=true; this.innerHTML='<span class=\'spinner-border spinner-border-sm me-1\'></span> Sending...'; document.getElementById('sendCredentialsForm').submit();">
                         <i class="ri-send-plane-line me-1"></i> Reset &amp; Send
                     </button>
                 </div>
