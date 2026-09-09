@@ -190,8 +190,29 @@
                         </div>
                         <p class="text-muted fs-12 mb-0">Status is updated automatically when an inspection is approved.</p>
 
-                        @if(!in_array($asset->current_status, ['removed', 'replaced']))
+                        @if(in_array($asset->current_status, ['removed', 'replaced']))
                         <hr class="my-3">
+                        <p class="text-muted fs-12 mb-2">This asset has been taken out of service. Reinstate it to make it active again.</p>
+                        <form method="POST" action="{{ route('admin.assets.reinstate', $asset) }}"
+                              onsubmit="return confirm('Reinstate this asset? Its status will be reset to Not Inspected.')">
+                            @csrf @method('PATCH')
+                            <button type="submit" class="btn btn-sm btn-outline-success w-100">
+                                <i class="ri-restart-line me-1"></i> Reinstate Asset
+                            </button>
+                        </form>
+                        @else
+                        <hr class="my-3">
+                        @if($asset->current_status !== 'not_located')
+                        <p class="text-muted fs-12 mb-2">Could not find the asset during inspection?</p>
+                        <form method="POST" action="{{ route('admin.assets.not-located', $asset) }}"
+                              onsubmit="return confirm('Mark this asset as Not Located?')"
+                              class="mb-2">
+                            @csrf @method('PATCH')
+                            <button type="submit" class="btn btn-sm btn-outline-dark w-100">
+                                <i class="ri-map-pin-line me-1"></i> Mark as Not Located
+                            </button>
+                        </form>
+                        @endif
                         <p class="text-muted fs-12 mb-2">Mark this asset as removed if it has been physically taken out of service.</p>
                         <form method="POST" action="{{ route('admin.assets.remove', $asset) }}"
                               onsubmit="return confirm('Mark this asset as removed? This cannot be undone via the UI.')">

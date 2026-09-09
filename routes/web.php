@@ -156,14 +156,17 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
 Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
     Route::prefix('assets')->name('assets.')->group(function () {
         // Static routes must come before parameterised /{asset} routes
-        Route::get('/',       [AssetController::class, 'index'])->middleware('permission:view assets|manage assets')->name('index');
-        Route::get('/create', [AssetController::class, 'create'])->middleware('permission:manage assets')->name('create');
-        Route::post('/',      [AssetController::class, 'store'])->middleware('permission:manage assets')->name('store');
+        Route::get('/',         [AssetController::class, 'index'])->middleware('permission:view assets|manage assets')->name('index');
+        Route::get('/history',  [AssetController::class, 'history'])->middleware('permission:view assets|manage assets')->name('history');
+        Route::get('/create',   [AssetController::class, 'create'])->middleware('permission:manage assets')->name('create');
+        Route::post('/',        [AssetController::class, 'store'])->middleware('permission:manage assets')->name('store');
 
         Route::get('/{asset}',                                [AssetController::class, 'show'])->middleware('permission:view assets|manage assets')->name('show');
         Route::get('/{asset}/edit',                           [AssetController::class, 'edit'])->middleware('permission:manage assets')->name('edit');
         Route::match(['put', 'patch'], '/{asset}',            [AssetController::class, 'update'])->middleware('permission:manage assets')->name('update');
-        Route::patch('/{asset}/remove',                       [AssetController::class, 'remove'])->middleware('permission:manage assets')->name('remove');
+        Route::patch('/{asset}/remove',      [AssetController::class, 'remove'])->middleware('permission:manage assets')->name('remove');
+        Route::patch('/{asset}/reinstate',   [AssetController::class, 'reinstate'])->middleware('permission:manage assets')->name('reinstate');
+        Route::patch('/{asset}/not-located', [AssetController::class, 'notLocated'])->middleware('permission:manage assets')->name('not-located');
     });
 });
 

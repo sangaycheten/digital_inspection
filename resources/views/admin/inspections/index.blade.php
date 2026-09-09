@@ -59,89 +59,6 @@
     </div>
     @endif
 
-    {{-- Stats --}}
-    <div class="row g-3 mb-3">
-        {{-- Total --}}
-        <div class="col-md-3">
-            <div class="card card-animate h-100">
-                <div class="card-body">
-                    <div class="d-flex align-items-center justify-content-between">
-                        <div>
-                            <p class="text-uppercase fw-medium text-muted fs-12 mb-1">Total Jobs</p>
-                            <h4 class="fs-22 fw-semibold mb-0">{{ $totalJobs }}</h4>
-                            <p class="text-muted fs-12 mb-0 mt-1">{{ $totalRecords }} inspection record{{ $totalRecords !== 1 ? 's' : '' }}</p>
-                        </div>
-                        <span class="avatar-title bg-primary-subtle rounded fs-3">
-                            <i class="ri-briefcase-line text-primary"></i>
-                        </span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        {{-- Pending --}}
-        <div class="col-md-3">
-            <div class="card card-animate h-100">
-                <div class="card-body">
-                    <div class="d-flex align-items-center justify-content-between">
-                        <div>
-                            <p class="text-uppercase fw-medium text-muted fs-12 mb-1">Pending Review</p>
-                            <h4 class="fs-22 fw-semibold mb-0">{{ $pendingCount }}</h4>
-                            <p class="text-muted fs-12 mb-0 mt-1">
-                                record{{ $pendingCount !== 1 ? 's' : '' }} across
-                                <strong>{{ $pendingJobs }}</strong> job{{ $pendingJobs !== 1 ? 's' : '' }}
-                            </p>
-                        </div>
-                        <span class="avatar-title bg-warning-subtle rounded fs-3">
-                            <i class="ri-time-line text-warning"></i>
-                        </span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        {{-- Sent back --}}
-        <div class="col-md-3">
-            <div class="card card-animate h-100">
-                <div class="card-body">
-                    <div class="d-flex align-items-center justify-content-between">
-                        <div>
-                            <p class="text-uppercase fw-medium text-muted fs-12 mb-1">Sent Back</p>
-                            <h4 class="fs-22 fw-semibold mb-0">{{ $sentBackCount }}</h4>
-                            <p class="text-muted fs-12 mb-0 mt-1">
-                                record{{ $sentBackCount !== 1 ? 's' : '' }} across
-                                <strong>{{ $sentBackJobs }}</strong> job{{ $sentBackJobs !== 1 ? 's' : '' }}
-                            </p>
-                        </div>
-                        <span class="avatar-title bg-danger-subtle rounded fs-3">
-                            <i class="ri-arrow-go-back-line text-danger"></i>
-                        </span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        {{-- Approved --}}
-        <div class="col-md-3">
-            <div class="card card-animate h-100">
-                <div class="card-body">
-                    <div class="d-flex align-items-center justify-content-between">
-                        <div>
-                            <p class="text-uppercase fw-medium text-muted fs-12 mb-1">Approved</p>
-                            <h4 class="fs-22 fw-semibold mb-0">{{ $approvedTotal }}</h4>
-                            <p class="text-muted fs-12 mb-0 mt-1">
-                                <strong class="text-success">{{ $approvedToday }}</strong> approved today
-                            </p>
-                        </div>
-                        <span class="avatar-title bg-success-subtle rounded fs-3">
-                            <i class="ri-shield-check-line text-success"></i>
-                        </span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <div class="card">
         <div class="card-header d-flex align-items-center gap-2">
             <h5 class="card-title mb-0 flex-grow-1">
@@ -168,15 +85,7 @@
                 @if($isDrillDown)
                 <input type="hidden" name="job_id" value="{{ $job->id }}">
                 @endif
-                <div class="col-md-2">
-                    <label class="form-label text-muted fs-12 mb-1">Status</label>
-                    <select name="status" class="form-select form-select-sm">
-                        <option value="">All Statuses</option>
-                        <option value="draft"     {{ request('status') === 'draft'     ? 'selected' : '' }}>Draft</option>
-                        <option value="submitted" {{ request('status') === 'submitted' ? 'selected' : '' }}>Pending Review</option>
-                        <option value="approved"  {{ request('status') === 'approved'  ? 'selected' : '' }}>Approved</option>
-                    </select>
-                </div>
+                @if(request('status'))<input type="hidden" name="status" value="{{ request('status') }}">@endif
                 @if(!$isDrillDown)
                 <div class="col-md-2">
                     <label class="form-label text-muted fs-12 mb-1">Client</label>

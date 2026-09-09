@@ -159,12 +159,13 @@ return [
                 'section' => 'Operations',
                 'items'   => [
                     [
-                        'permission' => 'view jobs',
-                        'icon'       => 'ri-briefcase-line',
-                        'id'         => 'sidebarJobsR',
-                        'children'   => [
-                            ['permission' => 'view jobs',   'icon' => 'ri-list-unordered',        'route' => 'admin.jobs.index',  'pattern' => 'admin.jobs.index'],
-                            ['permission' => 'manage jobs', 'icon' => 'ri-calendar-schedule-line', 'route' => 'admin.jobs.create', 'pattern' => 'admin.jobs.create'],
+                        'permission'      => 'view jobs',
+                        'icon'            => 'ri-briefcase-line',
+                        'id'              => 'sidebarJobsR',
+                        'active_patterns' => ['admin.jobs.*'],
+                        'children'        => [
+                            ['label' => 'Manage Jobs', 'permission' => 'view jobs', 'icon' => 'ri-list-unordered', 'route' => 'admin.jobs.index', 'pattern' => 'admin.jobs.index', 'active_patterns' => ['admin.jobs.show', 'admin.jobs.edit', 'admin.jobs.create', 'admin.jobs.certificate']],
+                            ['label' => 'History',     'permission' => 'view jobs', 'icon' => 'ri-history-line',   'route' => 'admin.jobs.index', 'params' => ['status' => 'closed'], 'pattern' => 'admin.jobs.index', 'active_params' => ['status' => 'closed']],
                         ],
                     ],
                     [
@@ -178,12 +179,14 @@ return [
                         ],
                     ],
                     [
-                        'permission' => 'view assets',
-                        'icon'       => 'ri-tools-line',
-                        'id'         => 'sidebarAssetsR',
-                        'children'   => [
-                            ['permission' => 'view assets', 'icon' => 'ri-list-check-3', 'route' => 'admin.assets.index', 'pattern' => 'admin.assets.index'],
-                            ['label' => 'Asset History',    'icon' => 'ri-history-line',  'route' => 'admin.assets.index', 'params' => ['status' => 'fail'], 'pattern' => 'admin.assets.*', 'active_params' => ['status' => 'fail']],
+                        'permission'      => 'view assets',
+                        'icon'            => 'ri-tools-line',
+                        'id'              => 'sidebarAssetsR',
+                        'active_patterns' => ['admin.assets.*'],
+                        'children'        => [
+                            ['label' => 'Manage Assets', 'permission' => 'view assets', 'icon' => 'ri-list-check-3', 'route' => 'admin.assets.index', 'pattern' => 'admin.assets.index', 'active_patterns' => ['admin.assets.show', 'admin.assets.edit', 'admin.assets.remove', 'admin.assets.reinstate', 'admin.assets.not-located', 'admin.assets.store', 'admin.assets.update']],
+                            ['label' => 'History',            'permission' => 'view assets', 'icon' => 'ri-archive-line',     'route' => 'admin.assets.index',   'params' => ['history' => '1'], 'pattern' => 'admin.assets.index', 'active_params' => ['history' => '1']],
+                            ['label' => 'Inspection History', 'icon' => 'ri-history-line',  'route' => 'admin.assets.history', 'pattern' => 'admin.assets.history'],
                         ],
                     ],
                 ],
@@ -202,10 +205,14 @@ return [
                 'section' => 'My Work',
                 'items'   => [
                     [
-                        'permission' => 'view jobs',
-                        'icon'       => 'ri-briefcase-line',
-                        'route'      => 'technician.jobs.index',
-                        'pattern'    => 'technician.jobs.*',
+                        'permission'      => 'view jobs',
+                        'icon'            => 'ri-briefcase-line',
+                        'id'              => 'sidebarTechJobs',
+                        'active_patterns' => ['technician.jobs.index', 'technician.jobs.show'],
+                        'children'        => [
+                            ['permission' => 'view jobs', 'label' => 'Pending', 'icon' => 'ri-time-line',    'route' => 'technician.jobs.index', 'pattern' => 'technician.jobs.index', 'no_params' => true],
+                            ['permission' => 'view jobs', 'label' => 'History', 'icon' => 'ri-history-line', 'route' => 'technician.jobs.index', 'params' => ['status' => 'closed'], 'pattern' => 'technician.jobs.index', 'active_params' => ['status' => 'closed']],
+                        ],
                     ],
                     [
                         'canany'           => ['capture inspections', 'capture reinspections', 'capture installations'],

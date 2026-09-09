@@ -239,18 +239,24 @@
     const DATA_TYPES_URL   = "{{ route('admin.master.data-types.index') }}";
 
     function filterSections() {
-        const assetType = document.getElementById('createAssetType').value;
+        const assetType  = document.getElementById('createAssetType').value;
         const sectionSel = document.getElementById('createSectionId');
-        const current = sectionSel.value;
+
         Array.from(sectionSel.options).forEach(opt => {
-            if (!opt.value) return; // keep the "No section" option
+            if (!opt.value) return;
             const matches = !assetType || opt.dataset.assetType === assetType;
-            opt.hidden = !matches;
+            opt.hidden   = !matches;
             opt.disabled = !matches;
         });
-        // Reset selection if currently selected option is now hidden
-        const selectedOpt = sectionSel.options[sectionSel.selectedIndex];
-        if (selectedOpt && selectedOpt.hidden) sectionSel.value = '';
+
+        // If no asset type selected, clear section; otherwise auto-select first visible
+        const selected = sectionSel.options[sectionSel.selectedIndex];
+        if (!assetType) {
+            sectionSel.value = '';
+        } else if (!selected || !selected.value || selected.hidden) {
+            const first = Array.from(sectionSel.options).find(o => o.value && !o.hidden);
+            sectionSel.value = first ? first.value : '';
+        }
     }
     // Run on page load to apply any pre-selected asset type (e.g. after validation failure)
     document.addEventListener('DOMContentLoaded', filterSections);

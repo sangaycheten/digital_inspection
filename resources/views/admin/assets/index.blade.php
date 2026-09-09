@@ -12,7 +12,10 @@
         'removed'        => 'dark',
         'replaced'       => 'info',
     ];
-    $typeLabels = $assetTypes;
+    $typeLabels  = $assetTypes;
+    $isHistory   = (bool) request('history');
+    // Params to preserve across tab clicks (everything except asset_type and page)
+    $tabParams   = array_filter(request()->only(['search', 'site_id', 'building_id', 'status', 'history']));
     @endphp
 
     <div class="row">
@@ -39,19 +42,35 @@
     <div class="row">
         <div class="col-12">
             <div class="card">
+
+                {{-- Card header --}}
                 <div class="card-header d-flex align-items-center">
                     <h5 class="card-title mb-0 flex-grow-1">
-                        <i class="ri-tools-line me-2 text-primary"></i>All Assets
+                        <i class="{{ $isHistory ? 'ri-archive-line' : 'ri-tools-line' }} me-2 text-primary"></i>
+                        {{ $isHistory ? 'Asset History' : ($activeType ? ($typeLabels[$activeType] ?? $activeType) : 'All Assets') }}
                         <span class="badge bg-primary-subtle text-primary ms-1">{{ $assets->total() }}</span>
+                        @if($isHistory)
+                        <span class="badge bg-secondary-subtle text-secondary ms-1 fs-11 fw-normal">Removed &amp; Replaced</span>
+                        @endif
                     </h5>
+                    @if(!$isHistory)
+                    @can('manage assets')
                     <a href="{{ route('admin.assets.create') }}" class="btn btn-sm btn-primary">
                         <i class="ri-add-line me-1"></i> Add Asset
                     </a>
+                    @endcan
+                    @endif
                 </div>
 
                 {{-- Filters --}}
                 <div class="card-body border-bottom pb-3">
-                    <form method="GET" action="{{ route('admin.assets.index') }}" class="row g-2 align-items-end">
+                    <form method="GET" action="{{ route('admin.assets.index') }}" class="row g-2 align-items-end" id="filterForm">
+                        @if($activeType)
+                        <input type="hidden" name="asset_type" value="{{ $activeType }}">
+                        @endif
+                        @if($isHistory)
+                        <input type="hidden" name="history" value="1">
+                        @endif
                         <div class="col-md-3">
                             <label class="form-label text-muted fs-12 mb-1">Search</label>
                             <input type="text" name="search" class="form-control form-control-sm"
@@ -80,15 +99,6 @@
                             </select>
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label text-muted fs-12 mb-1">Type</label>
-                            <select name="asset_type" class="form-select form-select-sm">
-                                <option value="">All Types</option>
-                                @foreach($typeLabels as $val => $label)
-                                <option value="{{ $val }}" {{ request('asset_type') == $val ? 'selected' : '' }}>{{ $label }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div class="col-md-2">
                             <label class="form-label text-muted fs-12 mb-1">Status</label>
                             <select name="status" class="form-select form-select-sm">
                                 <option value="">All Statuses</option>
@@ -110,6 +120,29 @@
                     </form>
                 </div>
 
+                {{-- Asset Type Tabs --}}
+                @if($typeCounts->isNotEmpty())
+                <div class="border-bottom px-3 pt-2" style="background:#f8f9fa;">
+                    <ul class="nav nav-tabs nav-tabs-custom" style="flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;border-bottom:none;gap:2px;">
+                        @foreach($typeCounts as $typeVal => $count)
+                        @php $isActive = $typeVal === $activeType; @endphp
+                        <li class="nav-item flex-shrink-0">
+                            <a href="{{ route('admin.assets.index', array_merge($tabParams, ['asset_type' => $typeVal])) }}"
+                               class="nav-link py-2 px-3 d-flex align-items-center gap-2 {{ $isActive ? 'active fw-semibold' : 'text-muted' }}"
+                               style="white-space:nowrap;border-bottom:{{ $isActive ? '2px solid var(--vz-primary)' : '2px solid transparent' }};border-radius:0;font-size:13px;">
+                                <i class="ri-stack-line fs-14"></i>
+                                {{ $typeLabels[$typeVal] ?? $typeVal }}
+                                <span class="badge {{ $isActive ? 'bg-primary text-white' : 'bg-light text-muted border' }} fs-10">
+                                    {{ $count }}
+                                </span>
+                            </a>
+                        </li>
+                        @endforeach
+                    </ul>
+                </div>
+                @endif
+
+                {{-- Table --}}
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
@@ -117,33 +150,24 @@
                                 <tr>
                                     <th class="ps-3">#</th>
                                     <th>Code</th>
-                                    <th>Type</th>
                                     <th>Site</th>
                                     <th>Building / Zone</th>
                                     <th>Make / Model</th>
+                                    <th>Serial / Batch</th>
                                     <th>Status</th>
                                     <th>Next Inspection</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @php $currentType = null; @endphp
                                 @forelse($assets as $asset)
                                 @php
                                     $color = $statusColors[$asset->current_status] ?? 'secondary';
                                     $due = $asset->next_inspection_due_date;
-                                    $dueClass = $due && $due->isPast() ? 'text-danger fw-semibold' : ($due && $due->diffInDays(now()) <= 30 ? 'text-warning fw-semibold' : 'text-muted');
+                                    $dueClass = $due && $due->isPast()
+                                        ? 'text-danger fw-semibold'
+                                        : ($due && $due->diffInDays(now()) <= 30 ? 'text-warning fw-semibold' : 'text-muted');
                                 @endphp
-                                @if($asset->asset_type !== $currentType)
-                                @php $currentType = $asset->asset_type; @endphp
-                                <tr class="table-light border-top border-2">
-                                    <td colspan="9" class="py-2 ps-3">
-                                        <span class="fw-semibold fs-12 text-uppercase text-primary">
-                                            <i class="ri-stack-line me-1"></i>{{ $typeLabels[$currentType] ?? $currentType }}
-                                        </span>
-                                    </td>
-                                </tr>
-                                @endif
                                 <tr>
                                     <td class="ps-3 text-muted fs-12">{{ $assets->firstItem() + $loop->index }}</td>
                                     <td>
@@ -151,15 +175,10 @@
                                             {{ $asset->asset_code }}
                                         </a>
                                         @if($asset->group_id)
-                                        <span class="ms-1 badge bg-light text-muted border fs-10" title="Group: {{ $asset->group_id }}">
+                                        <span class="ms-1 badge bg-light text-muted border fs-10">
                                             <i class="ri-stack-line"></i> Group
                                         </span>
                                         @endif
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-info-subtle text-info">
-                                            {{ $typeLabels[$asset->asset_type] ?? $asset->asset_type }}
-                                        </span>
                                     </td>
                                     <td>
                                         <div class="fs-13">{{ $asset->site->name ?? $asset->site->address }}</div>
@@ -177,6 +196,7 @@
                                         <span class="text-muted"> / {{ $asset->model }}</span>
                                         @endif
                                     </td>
+                                    <td class="fs-13 text-muted">{{ $asset->serial_or_batch ?? '—' }}</td>
                                     <td>
                                         @if($color === 'orange')
                                         <span class="badge" style="background-color:#fd7e14;color:#fff;">
@@ -197,17 +217,20 @@
                                                class="btn btn-sm btn-outline-primary" title="View">
                                                 <i class="ri-eye-line"></i>
                                             </a>
+                                            @can('manage assets')
                                             <a href="{{ route('admin.assets.edit', $asset) }}"
                                                class="btn btn-sm btn-outline-secondary" title="Edit">
                                                 <i class="ri-edit-line"></i>
                                             </a>
+                                            @endcan
                                         </div>
                                     </td>
                                 </tr>
                                 @empty
                                 <tr>
                                     <td colspan="9" class="text-center text-muted py-5">
-                                        <i class="ri-tools-line fs-24 d-block mb-2"></i>No assets found.
+                                        <i class="ri-tools-line fs-24 d-block mb-2 opacity-50"></i>
+                                        No assets found.
                                     </td>
                                 </tr>
                                 @endforelse
@@ -219,6 +242,7 @@
                 @if($assets->hasPages())
                 <div class="card-footer">{{ $assets->links() }}</div>
                 @endif
+
             </div>
         </div>
     </div>
