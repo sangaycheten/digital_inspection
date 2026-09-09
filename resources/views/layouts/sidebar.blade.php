@@ -59,6 +59,13 @@
 
     // Active-state detection for a child link.
     $childActive = function (array $child): bool {
+        // Check extra route patterns (e.g. show/edit pages that should keep parent item highlighted)
+        if (!empty($child['active_patterns'])) {
+            foreach ($child['active_patterns'] as $p) {
+                if (request()->routeIs($p)) return true;
+            }
+        }
+
         $pattern = $child['pattern'] ?? null;
         if (!$pattern) return false;
 

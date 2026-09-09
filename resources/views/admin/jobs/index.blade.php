@@ -132,6 +132,16 @@
                                     <td>
                                         <div class="fw-medium fs-13">{{ $job->client->name ?? '—' }}</div>
                                         <div class="text-muted fs-12">{{ $job->site->name ?? $job->site->address }}</div>
+                                        @php $jBuildings = $buildingsByJob[$job->id] ?? collect(); @endphp
+                                        @if($jBuildings->isNotEmpty())
+                                        <div class="mt-1 d-flex flex-wrap gap-1">
+                                            @foreach($jBuildings as $b)
+                                            <span class="badge bg-light text-secondary border fs-10">
+                                                <i class="ri-home-office-line me-1"></i>{{ $b->name_or_level }}
+                                            </span>
+                                            @endforeach
+                                        </div>
+                                        @endif
                                     </td>
                                     <td>
                                         <span class="badge bg-info-subtle text-info">

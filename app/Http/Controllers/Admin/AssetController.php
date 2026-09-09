@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Asset;
 use App\Models\Building;
+use App\Models\InspectionRecord;
 use App\Models\MasterLookup;
 use App\Models\Site;
 use Illuminate\Http\RedirectResponse;
@@ -18,18 +19,40 @@ class AssetController extends Controller
 {
     public function index(Request $request): View
     {
-        $assets = Asset::with(['site.client', 'building'])
-            ->when($request->search, fn ($q) =>
-                $q->where('asset_code', 'like', "%{$request->search}%")
-                  ->orWhere('make', 'like', "%{$request->search}%")
-                  ->orWhere('model', 'like', "%{$request->search}%")
-                  ->orWhere('serial_or_batch', 'like', "%{$request->search}%")
-            )
-            ->when($request->site_id,   fn ($q) => $q->where('site_id', $request->site_id))
-            ->when($request->building_id, fn ($q) => $q->where('building_id', $request->building_id))
-            ->when($request->asset_type, fn ($q) => $q->where('asset_type', $request->asset_type))
-            ->when($request->status,    fn ($q) => $q->where('current_status', $request->status))
+        $isHistory = (bool) $request->history;
+
+        $applyFilters = function ($q) use ($request, $isHistory) {
+            return $q
+                ->when($request->search, fn ($q) =>
+                    $q->where('asset_code', 'like', "%{$request->search}%")
+                      ->orWhere('make', 'like', "%{$request->search}%")
+                      ->orWhere('model', 'like', "%{$request->search}%")
+                      ->orWhere('serial_or_batch', 'like', "%{$request->search}%")
+                )
+                ->when($request->site_id,     fn ($q) => $q->where('site_id', $request->site_id))
+                ->when($request->building_id, fn ($q) => $q->where('building_id', $request->building_id))
+                ->when($request->status,
+                    fn ($q) => $q->where('current_status', $request->status),
+                    fn ($q) => $isHistory
+                        ? $q->whereIn('current_status', ['removed', 'replaced'])   // History: only retired assets
+                        : $q->whereNotIn('current_status', ['removed', 'replaced']) // Manage: hide retired assets
+                );
+        };
+
+        // Count per type (respects all filters except asset_type — that's the tab)
+        $typeCounts = $applyFilters(Asset::query())
+            ->selectRaw('asset_type, count(*) as cnt')
+            ->groupBy('asset_type')
             ->orderBy('asset_type')
+            ->pluck('cnt', 'asset_type');
+
+        // Default to first type with assets if none selected
+        $activeType = $request->asset_type && $typeCounts->has($request->asset_type)
+            ? $request->asset_type
+            : $typeCounts->keys()->first();
+
+        $assets = $applyFilters(Asset::with(['site.client', 'building']))
+            ->when($activeType, fn ($q) => $q->where('asset_type', $activeType))
             ->orderBy('asset_code')
             ->paginate(20)
             ->withQueryString();
@@ -40,7 +63,7 @@ class AssetController extends Controller
             : collect();
         $assetTypes = MasterLookup::assetTypeMap();
 
-        return view('admin.assets.index', compact('assets', 'sites', 'buildings', 'assetTypes'));
+        return view('admin.assets.index', compact('assets', 'sites', 'buildings', 'assetTypes', 'typeCounts', 'activeType'));
     }
 
     public function create(): View
@@ -258,5 +281,67 @@ class AssetController extends Controller
 
         return redirect()->route('admin.assets.show', $asset)
             ->with('success', "Asset {$asset->asset_code} has been marked as removed.");
+    }
+
+    public function reinstate(Asset $asset): RedirectResponse
+    {
+        $asset->update(['current_status' => 'not_inspected']);
+
+        activity()->useLog('asset')
+            ->causedBy(request()->user())
+            ->performedOn($asset)
+            ->event('reinstated')
+            ->log("Asset {$asset->asset_code} reinstated (status reset to not inspected).");
+
+        return redirect()->route('admin.assets.show', $asset)
+            ->with('success', "Asset {$asset->asset_code} has been reinstated.");
+    }
+
+    public function notLocated(Asset $asset): RedirectResponse
+    {
+        $asset->update(['current_status' => 'not_located']);
+
+        activity()->useLog('asset')
+            ->causedBy(request()->user())
+            ->performedOn($asset)
+            ->event('not_located')
+            ->log("Asset {$asset->asset_code} marked as not located.");
+
+        return redirect()->route('admin.assets.show', $asset)
+            ->with('success', "Asset {$asset->asset_code} has been marked as not located.");
+    }
+
+    public function history(Request $request): View
+    {
+        $records = InspectionRecord::with(['asset.site.client', 'asset.building', 'technician', 'job'])
+            ->when($request->search, fn ($q) =>
+                $q->whereHas('asset', fn ($a) =>
+                    $a->where('asset_code', 'like', "%{$request->search}%")
+                )
+            )
+            ->when($request->site_id, fn ($q) =>
+                $q->whereHas('asset', fn ($a) => $a->where('site_id', $request->site_id))
+            )
+            ->when($request->building_id, fn ($q) =>
+                $q->whereHas('asset', fn ($a) => $a->where('building_id', $request->building_id))
+            )
+            ->when($request->asset_type, fn ($q) =>
+                $q->whereHas('asset', fn ($a) => $a->where('asset_type', $request->asset_type))
+            )
+            ->when($request->result, fn ($q) => $q->where('result', $request->result))
+            ->when($request->date_from, fn ($q) => $q->where('inspection_date', '>=', $request->date_from))
+            ->when($request->date_to,   fn ($q) => $q->where('inspection_date', '<=', $request->date_to))
+            ->orderByDesc('inspection_date')
+            ->orderByDesc('created_at')
+            ->paginate(25)
+            ->withQueryString();
+
+        $sites      = Site::orderBy('name')->get();
+        $buildings  = $request->site_id
+            ? Building::where('site_id', $request->site_id)->orderBy('name_or_level')->get()
+            : collect();
+        $assetTypes = MasterLookup::assetTypeMap();
+
+        return view('admin.assets.history', compact('records', 'sites', 'buildings', 'assetTypes'));
     }
 }

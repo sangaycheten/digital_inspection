@@ -10,33 +10,64 @@ return [
     | The label is derived from the first permission slug in each module,
     | so adding new permissions to a module requires no code change here.
     */
-    // Maps DB module name → sidebar-matching display label for RBAC & Permissions pages
+    // Maps DB module name → display label (identity mappings can be omitted but listed for clarity)
     'module_labels' => [
-        'Settings'               => 'Settings',
-        'User & Role Management' => 'User & Role Management',
-        'Audit Log'              => 'Audit Log',
-        'Jobs'                   => 'Jobs',
-        'Asset Register'         => 'Asset Register',
-        'Documents'              => 'Documents',
-        'Client Portal'          => 'Client Portal',
-        'Inspections'            => 'Inspections',
-        'Re-Inspections'         => 'Re-Inspections',
+        'Users'                        => 'Users',
+        'Roles'                        => 'Roles',
+        'Permissions'                  => 'Permissions',
+        'Clients'                      => 'Clients',
+        'Sites'                        => 'Sites',
+        'Buildings'                    => 'Buildings',
+        'Reference Data'               => 'Reference Data',
+        'Sections'                     => 'Sections',
+        'Data Types'                   => 'Data Types',
+        'Client Assignments'           => 'Client Assignments',
+        'Questionnaires'               => 'Questionnaires',
+        'Jobs'                         => 'Jobs',
+        'Asset Register'               => 'Asset Register',
+        'Documents'                    => 'Documents',
+        'Client Portal'                => 'Client Portal',
+        'Inspections'                  => 'Inspections',
+        'Re-Inspections'               => 'Re-Inspections',
         'Installation & Rectification' => 'Installation & Rectification',
-        'Export'                 => 'Export',
-        'Reports'                => 'Reports',
+        'Audit Log'                    => 'Audit Log',
+        'Export'                       => 'Export',
     ],
 
+    // Maps sub-module → parent group name for two-level display in Permissions page
+    'parent_groups' => [
+        'Users'              => 'User & Role Management',
+        'Roles'              => 'User & Role Management',
+        'Permissions'        => 'User & Role Management',
+        'Clients'            => 'Manage Master',
+        'Sites'              => 'Manage Master',
+        'Buildings'          => 'Manage Master',
+        'Reference Data'     => 'Manage Master',
+        'Sections'           => 'Manage Master',
+        'Data Types'         => 'Manage Master',
+        'Client Assignments' => 'Manage Master',
+    ],
+
+    // Display order for parent group headers (Permissions page top-level sections)
+    'parent_group_order' => [
+        'User & Role Management',
+        'Manage Master',
+        'Questionnaires',
+        'Jobs',
+        'Asset Register',
+        'Documents',
+        'Inspections',
+        'Re-Inspections',
+        'Installation & Rectification',
+        'Client Portal',
+        'Audit Log',
+        'Export',
+    ],
+
+    // Sort order for sub-modules within their parent group
     'module_order' => [
-        'Users',
-        'Roles',
-        'Permissions',
-        'Clients',
-        'Sites',
-        'Buildings',
-        'Reference Data',
-        'Sections',
-        'Data Types',
-        'Client Assignments',
+        'Users', 'Roles', 'Permissions',
+        'Clients', 'Sites', 'Buildings', 'Reference Data', 'Sections', 'Data Types', 'Client Assignments',
         'Questionnaires',
         'Jobs',
         'Asset Register',
@@ -128,12 +159,13 @@ return [
                 'section' => 'Operations',
                 'items'   => [
                     [
-                        'permission' => 'view jobs',
-                        'icon'       => 'ri-briefcase-line',
-                        'id'         => 'sidebarJobsR',
-                        'children'   => [
-                            ['permission' => 'view jobs',   'icon' => 'ri-list-unordered',        'route' => 'admin.jobs.index',  'pattern' => 'admin.jobs.index'],
-                            ['permission' => 'manage jobs', 'icon' => 'ri-calendar-schedule-line', 'route' => 'admin.jobs.create', 'pattern' => 'admin.jobs.create'],
+                        'permission'      => 'view jobs',
+                        'icon'            => 'ri-briefcase-line',
+                        'id'              => 'sidebarJobsR',
+                        'active_patterns' => ['admin.jobs.*'],
+                        'children'        => [
+                            ['label' => 'Manage Jobs', 'permission' => 'view jobs', 'icon' => 'ri-list-unordered', 'route' => 'admin.jobs.index', 'pattern' => 'admin.jobs.index', 'active_patterns' => ['admin.jobs.show', 'admin.jobs.edit', 'admin.jobs.create', 'admin.jobs.certificate']],
+                            ['label' => 'History',     'permission' => 'view jobs', 'icon' => 'ri-history-line',   'route' => 'admin.jobs.index', 'params' => ['status' => 'closed'], 'pattern' => 'admin.jobs.index', 'active_params' => ['status' => 'closed']],
                         ],
                     ],
                     [
@@ -147,12 +179,14 @@ return [
                         ],
                     ],
                     [
-                        'permission' => 'view assets',
-                        'icon'       => 'ri-tools-line',
-                        'id'         => 'sidebarAssetsR',
-                        'children'   => [
-                            ['permission' => 'view assets', 'icon' => 'ri-list-check-3', 'route' => 'admin.assets.index', 'pattern' => 'admin.assets.index'],
-                            ['label' => 'Asset History',    'icon' => 'ri-history-line',  'route' => 'admin.assets.index', 'params' => ['status' => 'fail'], 'pattern' => 'admin.assets.*', 'active_params' => ['status' => 'fail']],
+                        'permission'      => 'view assets',
+                        'icon'            => 'ri-tools-line',
+                        'id'              => 'sidebarAssetsR',
+                        'active_patterns' => ['admin.assets.*'],
+                        'children'        => [
+                            ['label' => 'Manage Assets', 'permission' => 'view assets', 'icon' => 'ri-list-check-3', 'route' => 'admin.assets.index', 'pattern' => 'admin.assets.index', 'active_patterns' => ['admin.assets.show', 'admin.assets.edit', 'admin.assets.remove', 'admin.assets.reinstate', 'admin.assets.not-located', 'admin.assets.store', 'admin.assets.update']],
+                            ['label' => 'History',            'permission' => 'view assets', 'icon' => 'ri-archive-line',     'route' => 'admin.assets.index',   'params' => ['history' => '1'], 'pattern' => 'admin.assets.index', 'active_params' => ['history' => '1']],
+                            ['label' => 'Inspection History', 'icon' => 'ri-history-line',  'route' => 'admin.assets.history', 'pattern' => 'admin.assets.history'],
                         ],
                     ],
                 ],
@@ -171,10 +205,14 @@ return [
                 'section' => 'My Work',
                 'items'   => [
                     [
-                        'permission' => 'view jobs',
-                        'icon'       => 'ri-briefcase-line',
-                        'route'      => 'technician.jobs.index',
-                        'pattern'    => 'technician.jobs.*',
+                        'permission'      => 'view jobs',
+                        'icon'            => 'ri-briefcase-line',
+                        'id'              => 'sidebarTechJobs',
+                        'active_patterns' => ['technician.jobs.index', 'technician.jobs.show'],
+                        'children'        => [
+                            ['permission' => 'view jobs', 'label' => 'Pending', 'icon' => 'ri-time-line',    'route' => 'technician.jobs.index', 'pattern' => 'technician.jobs.index', 'no_params' => true],
+                            ['permission' => 'view jobs', 'label' => 'History', 'icon' => 'ri-history-line', 'route' => 'technician.jobs.index', 'params' => ['status' => 'closed'], 'pattern' => 'technician.jobs.index', 'active_params' => ['status' => 'closed']],
+                        ],
                     ],
                     [
                         'canany'           => ['capture inspections', 'capture reinspections', 'capture installations'],

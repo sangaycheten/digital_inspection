@@ -33,15 +33,26 @@ class JobController extends Controller
             ->when($request->site_id,    fn ($q) => $q->where('site_id', $request->site_id))
             ->when($request->client_id,  fn ($q) => $q->where('client_id', $request->client_id))
             ->when($request->work_type,  fn ($q) => $q->where('work_type', $request->work_type))
-            ->when($request->status,     fn ($q) => $q->where('status', $request->status))
+            ->when($request->status,
+                fn ($q) => $q->where('status', $request->status),
+                fn ($q) => $q->where('status', '!=', 'closed')  // History tab handles closed jobs
+            )
             ->latest()
             ->paginate(20)
             ->withQueryString();
 
+        $jobIds = $jobs->pluck('id');
+        $buildingsByJob = DB::table('job_buildings')
+            ->whereIn('job_id', $jobIds)
+            ->join('buildings', 'job_buildings.building_id', '=', 'buildings.id')
+            ->select('job_buildings.job_id', 'buildings.name_or_level')
+            ->get()
+            ->groupBy('job_id');
+
         $sites   = Site::orderBy('name')->get();
         $clients = Client::orderBy('name')->get();
 
-        return view('admin.jobs.index', compact('jobs', 'sites', 'clients'));
+        return view('admin.jobs.index', compact('jobs', 'sites', 'clients', 'buildingsByJob'));
     }
 
     public function create(): View

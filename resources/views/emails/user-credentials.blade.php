@@ -9,7 +9,7 @@ Your account on **{{ config('app.name') }}** has been set up. Below are your log
 | | |
 |---|---|
 | **Email** | {{ $user->email }} |
-| **Password** | `{{ $password }}` |
+| **Password** | `{!! $password !!}` |
 </x-mail::table>
 
 Please log in and change your password immediately after signing in.

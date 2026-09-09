@@ -28,10 +28,17 @@ use App\Http\Controllers\Client\ReportController as ClientReportController;
 use App\Http\Controllers\Client\FeedbackController as ClientFeedbackController;
 use App\Http\Controllers\Admin\FeedbackController as AdminFeedbackController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Auth\ChangePasswordController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('welcome');
+});
+
+// Force password change — accessible to any authenticated user
+Route::middleware('auth')->group(function () {
+    Route::get('/change-password', [ChangePasswordController::class, 'show'])->name('password.change');
+    Route::post('/change-password', [ChangePasswordController::class, 'update'])->name('password.change.update');
 });
 
 // System Administrator — dashboard and questionnaires (admin-only)
@@ -107,6 +114,7 @@ Route::middleware(['auth', 'role:system-administrator|manager'])->prefix('admin'
     Route::delete('/users/{user}',          [RegisteredUserController::class, 'destroy'])        ->name('users.destroy')          ->middleware('permission:delete users');
     Route::patch('/users/{user}/restore',   [RegisteredUserController::class, 'restore'])        ->name('users.restore')          ->middleware('permission:edit users')->withTrashed();
     Route::post('/users/{user}/send-credentials', [RegisteredUserController::class, 'sendCredentials'])->name('users.send-credentials')->middleware('permission:edit users');
+    Route::put('/users/{user}/reset-password',   [RegisteredUserController::class, 'resetPassword'])  ->name('users.reset-password')  ->middleware('permission:edit users');
 
     // Roles (RBAC matrix)
     Route::get('/rbac',  [RbacController::class, 'index']) ->name('rbac.index')  ->middleware('permission:view roles');
@@ -148,14 +156,17 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
 Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
     Route::prefix('assets')->name('assets.')->group(function () {
         // Static routes must come before parameterised /{asset} routes
-        Route::get('/',       [AssetController::class, 'index'])->middleware('permission:view assets|manage assets')->name('index');
-        Route::get('/create', [AssetController::class, 'create'])->middleware('permission:manage assets')->name('create');
-        Route::post('/',      [AssetController::class, 'store'])->middleware('permission:manage assets')->name('store');
+        Route::get('/',         [AssetController::class, 'index'])->middleware('permission:view assets|manage assets')->name('index');
+        Route::get('/history',  [AssetController::class, 'history'])->middleware('permission:view assets|manage assets')->name('history');
+        Route::get('/create',   [AssetController::class, 'create'])->middleware('permission:manage assets')->name('create');
+        Route::post('/',        [AssetController::class, 'store'])->middleware('permission:manage assets')->name('store');
 
         Route::get('/{asset}',                                [AssetController::class, 'show'])->middleware('permission:view assets|manage assets')->name('show');
         Route::get('/{asset}/edit',                           [AssetController::class, 'edit'])->middleware('permission:manage assets')->name('edit');
         Route::match(['put', 'patch'], '/{asset}',            [AssetController::class, 'update'])->middleware('permission:manage assets')->name('update');
-        Route::patch('/{asset}/remove',                       [AssetController::class, 'remove'])->middleware('permission:manage assets')->name('remove');
+        Route::patch('/{asset}/remove',      [AssetController::class, 'remove'])->middleware('permission:manage assets')->name('remove');
+        Route::patch('/{asset}/reinstate',   [AssetController::class, 'reinstate'])->middleware('permission:manage assets')->name('reinstate');
+        Route::patch('/{asset}/not-located', [AssetController::class, 'notLocated'])->middleware('permission:manage assets')->name('not-located');
     });
 });
 

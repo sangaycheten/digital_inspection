@@ -18,17 +18,6 @@ class InspectionController extends Controller
 {
     public function index(Request $request): View
     {
-        $totalJobs     = Job::whereHas('inspectionRecords')->count();
-        $totalRecords  = InspectionRecord::count();
-        $pendingCount  = InspectionRecord::where('document_status', 'submitted')->count();
-        $pendingJobs   = Job::whereHas('inspectionRecords', fn ($q) => $q->where('document_status', 'submitted'))->count();
-        $sentBackCount = InspectionRecord::where('document_status', 'draft')
-                            ->where('required_action', 'like', '[REJECTED]%')->count();
-        $sentBackJobs  = Job::where('status', 'rectification_required')
-                            ->whereHas('inspectionRecords')->count();
-        $approvedTotal = InspectionRecord::where('document_status', 'approved')->count();
-        $approvedToday = InspectionRecord::where('document_status', 'approved')->whereDate('created_at', today())->count();
-
         $technicians = User::role('field-technician')->orderBy('name')->get();
         $managers    = User::role('manager')->orderBy('name')->get();
         $sites       = Site::orderBy('name')->get();
@@ -47,9 +36,7 @@ class InspectionController extends Controller
                 ->withQueryString();
 
             return view('admin.inspections.index', compact(
-                'records', 'job', 'technicians', 'managers', 'sites', 'clients',
-                'totalJobs', 'totalRecords', 'pendingCount', 'pendingJobs',
-                'sentBackCount', 'sentBackJobs', 'approvedTotal', 'approvedToday'
+                'records', 'job', 'technicians', 'managers', 'sites', 'clients'
             ));
         }
 
@@ -79,9 +66,7 @@ class InspectionController extends Controller
             ->withQueryString();
 
         return view('admin.inspections.index', compact(
-            'jobs', 'technicians', 'managers', 'sites', 'clients',
-            'totalJobs', 'totalRecords', 'pendingCount', 'pendingJobs',
-            'sentBackCount', 'sentBackJobs', 'approvedTotal', 'approvedToday'
+            'jobs', 'technicians', 'managers', 'sites', 'clients'
         ));
     }
 

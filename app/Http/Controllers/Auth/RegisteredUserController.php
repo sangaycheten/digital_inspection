@@ -119,8 +119,23 @@ class RegisteredUserController extends Controller
             ->withProperties(['attributes' => $logProps])
             ->log("User created: {$user->name}");
 
+        // When a password was set manually, email it immediately while the plain text is still available.
+        $mailMessage = '';
+        if ($settingPassword) {
+            try {
+                Mail::to($user->email)->send(new UserCredentialsMail($user, $request->password));
+                $user->update([
+                    'credentials_sent_at'   => now(),
+                    'force_password_change' => true,
+                ]);
+                $mailMessage = " Credentials have been emailed to {$user->email}.";
+            } catch (\Throwable) {
+                $mailMessage = " Warning: credentials email could not be sent — please use the Send Credentials button.";
+            }
+        }
+
         return redirect()->route('admin.users.index')
-            ->with('success', "User {$user->name} created successfully.");
+            ->with('success', "User {$user->name} created successfully.{$mailMessage}");
     }
 
     public function edit(User $user): View
@@ -249,9 +264,10 @@ class RegisteredUserController extends Controller
     {
         $temporaryPassword = Str::random(10);
         $user->update([
-            'password'            => Hash::make($temporaryPassword),
-            'has_password'        => true,
-            'credentials_sent_at' => now(),
+            'password'              => Hash::make($temporaryPassword),
+            'has_password'          => true,
+            'credentials_sent_at'   => now(),
+            'force_password_change' => true,
         ]);
 
         try {
@@ -268,6 +284,28 @@ class RegisteredUserController extends Controller
             ->log("Credentials sent to: {$user->email}");
 
         return back()->with('success', "Login credentials sent to {$user->email}.");
+    }
+
+    public function resetPassword(Request $request, User $user): RedirectResponse
+    {
+        $request->validate([
+            'new_password' => ['required', 'confirmed', Rules\Password::defaults()],
+        ]);
+
+        $user->update([
+            'password'              => Hash::make($request->new_password),
+            'has_password'          => true,
+            'force_password_change' => $request->boolean('force_password_change'),
+        ]);
+
+        activity()->useLog('user')
+            ->causedBy($request->user())
+            ->performedOn($user)
+            ->event('password_reset')
+            ->log("Password reset by admin for: {$user->email}");
+
+        return redirect()->route('admin.users.edit', $user)
+            ->with('pwd_success', "Password for {$user->name} has been reset successfully.");
     }
 
     public function restore(int $id): RedirectResponse

@@ -339,6 +339,10 @@
 
     {{-- Questionnaire templates (Blade-rendered, hidden, cloned by JS) --}}
     <div id="qTemplates" style="display:none" aria-hidden="true">
+        @php
+        $qColors  = ['#6366f1','#f97316','#10b981','#3b82f6','#ec4899','#eab308','#8b5cf6','#14b8a6'];
+        $sqColors = ['#a5b4fc','#fdba74','#6ee7b7','#93c5fd','#f9a8d4','#fde68a','#c4b5fd','#5eead4'];
+        @endphp
         @foreach($questionsByType as $assetType => $questions)
         <div class="q-tpl" data-asset-type="{{ $assetType }}">
             @foreach($questions as $q)
@@ -346,12 +350,14 @@
                 $fieldType = $q->fieldType;
                 $hasConditionalSubs = in_array($q->type, ['switch', 'three_tier_switch'])
                     && $q->subQuestionnaires->whereNotNull('condition')->isNotEmpty();
-                $oldVal = old("answers.{$q->id}");
-                $qNum   = $loop->iteration;
+                $oldVal  = old("answers.{$q->id}");
+                $qNum    = $loop->iteration;
+                $qColor  = $qColors[($loop->index) % count($qColors)];
+                $sqColor = $sqColors[($loop->index) % count($sqColors)];
             @endphp
-            <div class="border rounded p-2 bg-white">
+            <div class="rounded p-2 bg-white" style="border:1px solid #e9ebec;border-left:4px solid {{ $qColor }};">
                 <label class="form-label fs-12 fw-medium mb-1 d-flex align-items-center gap-1">
-                    <span class="badge bg-secondary-subtle text-secondary fw-semibold" style="min-width:20px">{{ $qNum }}</span>
+                    <span class="badge fw-semibold" style="min-width:22px;background:{{ $qColor }};color:#fff;">{{ $qNum }}</span>
                     {{ $q->name }}@if($q->required)<span class="text-danger ms-1">*</span>@endif
                 </label>
 
@@ -390,10 +396,11 @@
                     $sqCounters[$sqCondKey] = $sqCounters[$sqCondKey] ?? 0;
                     $sqLetter  = chr(ord('a') + $sqCounters[$sqCondKey]++);
                 @endphp
-                <div class="mt-2 ps-2 border-start border-2 border-secondary-subtle"
-                     @if($sq->condition) data-sq-parent="{{ $q->id }}" data-sq-cond="{{ $sq->condition }}" style="display:none;" @endif>
+                <div class="mt-2 ps-2"
+                     style="border-left:3px solid {{ $sqColor }};@if($sq->condition) display:none;@endif"
+                     @if($sq->condition) data-sq-parent="{{ $q->id }}" data-sq-cond="{{ $sq->condition }}" @endif>
                     <label class="form-label fs-11 text-muted mb-1 d-flex align-items-center gap-1">
-                        <span class="badge bg-light text-secondary border fw-semibold" style="min-width:18px;font-size:10px">{{ $sqLetter }}</span>
+                        <span class="badge fw-semibold" style="min-width:18px;font-size:10px;background:{{ $sqColor }};color:#fff;">{{ $sqLetter }}</span>
                         {{ $sq->name }}@if($sq->required)<span class="text-danger ms-1">*</span>@endif
                     </label>
                     @if($sq->type === 'long_text')

@@ -26,20 +26,47 @@ class JobController extends Controller
             ->whereHas('technicians', fn ($q) => $q->where('users.id', $userId))
             ->when($request->work_type, fn ($q) => $q->where('work_type', $request->work_type))
             ->when($request->status,    fn ($q) => $q->where('status', $request->status))
+            ->when(!$request->filled('status'), fn ($q) => $q->where('status', '!=', 'closed'))
             ->latest()
             ->paginate(20)
             ->withQueryString();
 
-        // Load assigned_at per job from the pivot
         $jobIds = $jobs->pluck('id');
-        $assignedAtMap = \Illuminate\Support\Facades\DB::table('job_technician_buildings')
+
+        // Load assigned_at per job from the pivot
+        $assignedAtMap = DB::table('job_technician_buildings')
             ->whereIn('job_id', $jobIds)
             ->where('user_id', $userId)
             ->selectRaw('job_id, MIN(created_at) as assigned_at')
             ->groupBy('job_id')
             ->pluck('assigned_at', 'job_id');
 
-        return view('technician.jobs.index', compact('jobs', 'assignedAtMap'));
+        // Buildings this technician is assigned to, per job
+        $techBuildingsByJob = DB::table('job_technician_buildings')
+            ->whereIn('job_id', $jobIds)
+            ->where('user_id', $userId)
+            ->join('buildings', 'job_technician_buildings.building_id', '=', 'buildings.id')
+            ->select('job_technician_buildings.job_id', 'buildings.id', 'buildings.name_or_level')
+            ->get()
+            ->groupBy('job_id');
+
+        // All job buildings (fallback when no per-technician assignment exists)
+        $allBuildingsByJob = DB::table('job_buildings')
+            ->whereIn('job_id', $jobIds)
+            ->join('buildings', 'job_buildings.building_id', '=', 'buildings.id')
+            ->select('job_buildings.job_id', 'buildings.name_or_level')
+            ->get()
+            ->groupBy('job_id');
+
+        // Merge: prefer technician-specific; fall back to all job buildings
+        $buildingsByJob = $jobIds->mapWithKeys(function ($jobId) use ($techBuildingsByJob, $allBuildingsByJob) {
+            $specific = $techBuildingsByJob->get($jobId);
+            return [$jobId => ($specific && $specific->isNotEmpty())
+                ? $specific
+                : $allBuildingsByJob->get($jobId, collect())];
+        });
+
+        return view('technician.jobs.index', compact('jobs', 'assignedAtMap', 'buildingsByJob'));
     }
 
     public function show(Job $job): View
