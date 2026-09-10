@@ -2,7 +2,6 @@
     <x-slot name="title">Job Details</x-slot>
 
     @push('styles')
-    <link rel="stylesheet" href="{{ asset('assets/libs/leaflet/leaflet.css') }}">
     @endpush
 
     @php
@@ -975,7 +974,7 @@
 @endif
 
 @push('scripts')
-<script src="{{ asset('assets/libs/leaflet/leaflet.js') }}"></script>
+@include('partials.google-maps')
 <script>
 @if(isset($siteLat) && $siteLat && $siteLng)
 (function () {
@@ -983,9 +982,11 @@
     const mapEl     = document.getElementById('techBuildingMap');
     if (!toggleBtn || !mapEl) return;
 
-    let leafletMap = null;
+    const center = { lat: {{ $siteLat }}, lng: {{ $siteLng }} };
+    const zones  = @json($zoneMapData);
+    let map = null;
 
-    toggleBtn.addEventListener('click', function () {
+    toggleBtn.addEventListener('click', async function () {
         const visible = mapEl.style.display !== 'none';
 
         if (visible) {
@@ -997,29 +998,56 @@
         mapEl.style.display = 'block';
         toggleBtn.innerHTML = '<i class="ri-map-2-line me-1"></i>Hide Map';
 
-        if (leafletMap) {
-            leafletMap.invalidateSize();
-            return;
-        }
+        // Google Maps auto-resizes its container but does not re-centre.
+        if (map) { map.setCenter(center); return; }
 
-        // First open — initialise Leaflet
-        leafletMap = L.map('techBuildingMap').setView([{{ $siteLat }}, {{ $siteLng }}], 19);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-            maxZoom: 22
-        }).addTo(leafletMap);
-
-        const zones = @json($zoneMapData);
-        zones.forEach(function (zone) {
-            L.polygon(zone.polygon, {
-                color: zone.color, fillColor: zone.color, fillOpacity: 0.3, weight: 2,
-            })
-            .bindTooltip('<strong>' + zone.building + '</strong><br>' + zone.name, { sticky: true })
-            .addTo(leafletMap);
+        // First open — initialise now that the container has dimensions.
+        const mapsLib = await google.maps.importLibrary('maps');
+        map = new mapsLib.Map(mapEl, {
+            center: center,
+            zoom: 19,
+            mapId:             (window.APP_MAPS && window.APP_MAPS.mapId) || undefined,
+            mapTypeId:         (window.APP_MAPS && window.APP_MAPS.defaultMapTypeId) || 'hybrid',
+            mapTypeControl:    true,
+            streetViewControl: false,
+            tilt: 0,
         });
 
-        if (zones.length) {
-            leafletMap.fitBounds(zones.flatMap(z => z.polygon), { padding: [20, 20] });
+        const infoWindow = new mapsLib.InfoWindow();
+        const bounds     = new google.maps.LatLngBounds();
+
+        zones.forEach(function (zone) {
+            const path = zone.polygon.map(function (p) {
+                return Array.isArray(p) ? { lat: Number(p[0]), lng: Number(p[1]) } : { lat: Number(p.lat), lng: Number(p.lng) };
+            });
+            path.forEach(function (pt) { bounds.extend(pt); });
+
+            const shape = new google.maps.Polygon({
+                map: map,
+                paths: path,
+                strokeColor:   zone.color,
+                strokeWeight:  2,
+                strokeOpacity: 1,
+                fillColor:     zone.color,
+                fillOpacity:   0.3,
+            });
+
+            shape.addListener('click', function (e) {
+                const content = document.createElement('div');
+                const title   = document.createElement('strong');
+                title.textContent = zone.building;
+                content.appendChild(title);
+                content.appendChild(document.createElement('br'));
+                content.appendChild(document.createTextNode(zone.name));
+
+                infoWindow.setContent(content);
+                infoWindow.setPosition(e.latLng);
+                infoWindow.open({ map: map });
+            });
+        });
+
+        if (zones.length && !bounds.isEmpty()) {
+            map.fitBounds(bounds, 20);
         }
     });
 })();

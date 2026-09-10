@@ -2,7 +2,6 @@
     <x-slot name="title">Sites</x-slot>
 
     @push('styles')
-    <link rel="stylesheet" href="{{ asset('assets/libs/leaflet/leaflet.css') }}">
     <style>
         .site-map { height: 280px; width: 100%; border-radius: 6px; border: 1px solid #dee2e6; }
         .modal-dialog-map { max-width: 640px; }
@@ -196,6 +195,7 @@
                                                                                   autocomplete="off"
                                                                                   data-suggestions="editSuggestions{{ $site->id }}"
                                                                                   data-map-id="editMap{{ $site->id }}"
+                                                                                  data-region-codes="au"
                                                                                   placeholder="Start typing to search address...">{{ $site->address }}</textarea>
                                                                         <ul class="address-suggestions" id="editSuggestions{{ $site->id }}"></ul>
                                                                     </div>
@@ -336,6 +336,7 @@
                                               rows="2" required autocomplete="off"
                                               data-suggestions="createSuggestions"
                                               data-map-id="createMap"
+                                              data-region-codes="au"
                                               placeholder="Start typing to search address...">{{ old('address') }}</textarea>
                                     <ul class="address-suggestions" id="createSuggestions"></ul>
                                 </div>
@@ -397,223 +398,67 @@
     </div>
 
     @push('scripts')
-    <script src="{{ asset('assets/libs/leaflet/leaflet.js') }}"></script>
+    @include('partials.google-maps')
+    <script src="{{ asset('assets/js/maps/gmap-picker.js') }}"></script>
     <script>
-    const OSM_TILES   = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-    const OSM_ATTR    = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
-    const DEFAULT_LAT = 27.4716, DEFAULT_LNG = 89.6386, DEFAULT_ZOOM = 17;
-
-    // Registry: mapId → { map, placePin }
-    const mapRegistry = {};
-
-    // ── Timezone auto-detection from coordinates ──────────────────
-    function fetchTimezone(lat, lng, inputEl, displayEl, loadingEl) {
-        if (!inputEl || !displayEl) return;
-        if (loadingEl) loadingEl.style.display = '';
-        displayEl.className = 'badge bg-secondary-subtle text-secondary fs-12';
-
-        fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&timezone=auto&forecast_days=0`)
-            .then(r => r.json())
-            .then(data => {
-                const tz = data.timezone || 'UTC';
-                inputEl.value      = tz;
-                displayEl.textContent = tz;
-                displayEl.className   = 'badge bg-success-subtle text-success fs-12';
-            })
-            .catch(() => {
-                displayEl.className = 'badge bg-warning-subtle text-warning fs-12';
-            })
-            .finally(() => { if (loadingEl) loadingEl.style.display = 'none'; });
-    }
-
-    // ── Map initialisation ────────────────────────────────────────
-    // ── Reverse geocoding (coords → address) ─────────────────────
-    function reverseGeocode(lat, lng, addressEl) {
-        if (!addressEl) return;
-        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`, {
-            headers: { 'Accept-Language': 'en' }
-        })
-        .then(r => r.json())
-        .then(data => { if (data && data.display_name) addressEl.value = data.display_name; })
-        .catch(() => {});
-    }
-
-    function initMap(mapId, latEl, lngEl, initLat, initLng, tzInputEl, tzDisplayEl, tzLoadingEl, addressEl) {
-        const hasCoords = parseFloat(initLat) && parseFloat(initLng);
-        const lat  = hasCoords ? parseFloat(initLat) : DEFAULT_LAT;
-        const lng  = hasCoords ? parseFloat(initLng) : DEFAULT_LNG;
-        const zoom = hasCoords ? DEFAULT_ZOOM : 6;
-
-        const map = L.map(mapId).setView([lat, lng], zoom);
-        L.tileLayer(OSM_TILES, { attribution: OSM_ATTR, maxZoom: 19 }).addTo(map);
-
-        let marker = hasCoords ? L.marker([lat, lng]).addTo(map) : null;
-
-        function placePin(la, lo, skipReverseGeocode) {
-            if (marker) map.removeLayer(marker);
-            marker = L.marker([la, lo]).addTo(map);
-            map.setView([la, lo], DEFAULT_ZOOM);
-            latEl.value = parseFloat(la).toFixed(7);
-            lngEl.value = parseFloat(lo).toFixed(7);
-            fetchTimezone(la, lo, tzInputEl, tzDisplayEl, tzLoadingEl);
-            if (!skipReverseGeocode) reverseGeocode(la, lo, addressEl);
-        }
-
-        map.on('click', function (e) { placePin(e.latlng.lat, e.latlng.lng); });
-
-        [latEl, lngEl].forEach(function (el) {
-            el.addEventListener('keydown', function (e) {
-                if (e.key !== 'Enter') return;
-                e.preventDefault();
-                const la = parseFloat(latEl.value);
-                const lo = parseFloat(lngEl.value);
-                if (!isNaN(la) && !isNaN(lo)) placePin(la, lo);
-            });
+    // Address autocomplete on every address textarea (create + all edit modals).
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('textarea[data-suggestions]').forEach(function (el) {
+            GMapPicker.attachAutocomplete(el);
         });
-
-        mapRegistry[mapId] = { map, placePin };
-        return mapRegistry[mapId];
-    }
-
-    // ── Debounce helper ───────────────────────────────────────────
-    function debounce(fn, delay) {
-        let timer;
-        return function () {
-            clearTimeout(timer);
-            timer = setTimeout(fn, delay);
-        };
-    }
-
-    // ── Address autocomplete ──────────────────────────────────────
-    function hideSuggestions(ulEl) {
-        ulEl.innerHTML = '';
-        ulEl.style.display = 'none';
-    }
-
-    function renderSuggestions(results, ulEl, textareaEl, mapId) {
-        ulEl.innerHTML = '';
-        if (!results.length) {
-            const li = document.createElement('li');
-            li.className = 'suggestion-searching text-muted';
-            li.textContent = 'No results found.';
-            ulEl.appendChild(li);
-            ulEl.style.display = 'block';
-            return;
-        }
-        results.forEach(function (r) {
-            const li = document.createElement('li');
-            li.className = 'suggestion-item';
-            li.innerHTML = '<i class="ri-map-pin-line me-2 text-primary"></i>' + r.display_name;
-            li.addEventListener('mousedown', function (e) {
-                e.preventDefault();
-                textareaEl.value = r.display_name;
-                hideSuggestions(ulEl);
-                if (mapRegistry[mapId]) {
-                    mapRegistry[mapId].placePin(parseFloat(r.lat), parseFloat(r.lon), true);
-                }
-            });
-            ulEl.appendChild(li);
-        });
-        ulEl.style.display = 'block';
-    }
-
-    function attachAutocomplete(textareaEl) {
-        const ulEl  = document.getElementById(textareaEl.dataset.suggestions);
-        const mapId = textareaEl.dataset.mapId;
-
-        const doSearch = debounce(function () {
-            const q = textareaEl.value.trim();
-            if (q.length < 3) { hideSuggestions(ulEl); return; }
-
-            ulEl.innerHTML = '<li class="suggestion-searching"><i class="ri-loader-4-line me-1"></i>Searching...</li>';
-            ulEl.style.display = 'block';
-
-            fetch('https://nominatim.openstreetmap.org/search?format=json&limit=5&q=' + encodeURIComponent(q), {
-                headers: { 'Accept-Language': 'en' }
-            })
-            .then(function (r) { return r.json(); })
-            .then(function (results) { renderSuggestions(results, ulEl, textareaEl, mapId); })
-            .catch(function () { hideSuggestions(ulEl); });
-        }, 500);
-
-        textareaEl.addEventListener('input', doSearch);
-
-        // Keyboard navigation inside the dropdown
-        textareaEl.addEventListener('keydown', function (e) {
-            const items  = ulEl.querySelectorAll('.suggestion-item');
-            const active = ulEl.querySelector('.suggestion-item.active');
-            if (!items.length) return;
-
-            if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                if (!active) { items[0].classList.add('active'); }
-                else {
-                    active.classList.remove('active');
-                    (active.nextElementSibling || items[0]).classList.add('active');
-                }
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                if (active) {
-                    active.classList.remove('active');
-                    (active.previousElementSibling || items[items.length - 1]).classList.add('active');
-                }
-            } else if (e.key === 'Enter') {
-                const sel = ulEl.querySelector('.suggestion-item.active');
-                if (sel) { e.preventDefault(); sel.dispatchEvent(new MouseEvent('mousedown')); }
-            } else if (e.key === 'Escape') {
-                hideSuggestions(ulEl);
-            }
-        });
-
-        textareaEl.addEventListener('blur', function () {
-            setTimeout(function () { hideSuggestions(ulEl); }, 150);
-        });
-    }
-
-    // Attach autocomplete to all address textareas
-    document.querySelectorAll('textarea[data-suggestions]').forEach(attachAutocomplete);
-
-    // ── Create modal ──────────────────────────────────────────────
-    document.getElementById('createSiteModal').addEventListener('shown.bs.modal', function () {
-        if (mapRegistry['createMap']) { mapRegistry['createMap'].map.invalidateSize(); return; }
-        const latEl     = document.getElementById('createLat');
-        const lngEl     = document.getElementById('createLng');
-        const tzInput   = document.getElementById('createTimezone');
-        const tzDisplay = document.getElementById('createTimezoneDisplay');
-        const tzLoading = document.getElementById('createTimezoneLoading');
-        const addrEl    = document.getElementById('createAddress');
-        initMap('createMap', latEl, lngEl, latEl.value, lngEl.value, tzInput, tzDisplay, tzLoading, addrEl);
     });
 
-    // ── Edit modals ───────────────────────────────────────────────
+    function recenter(key) {
+        const slot = GMapPicker.get(key);
+        if (!slot) return false;
+        Promise.resolve(slot.ready).then(function (s) { if (s && s.setCenter) s.setCenter(); });
+        return true;
+    }
+
+    // -- Create modal --
+    document.getElementById('createSiteModal').addEventListener('shown.bs.modal', function () {
+        if (recenter('createMap')) return;
+        GMapPicker.init({
+            mapId:       'createMap',
+            latEl:       document.getElementById('createLat'),
+            lngEl:       document.getElementById('createLng'),
+            addressEl:   document.getElementById('createAddress'),
+            tzInputEl:   document.getElementById('createTimezone'),
+            tzDisplayEl: document.getElementById('createTimezoneDisplay'),
+            tzLoadingEl: document.getElementById('createTimezoneLoading'),
+        });
+    });
+
+    // -- Edit modals --
     document.querySelectorAll('[id^="editSiteModal"]').forEach(function (modal) {
         modal.addEventListener('shown.bs.modal', function () {
-            const siteId    = modal.id.replace('editSiteModal', '');
-            const mapId     = 'editMap' + siteId;
-            if (mapRegistry[mapId]) { mapRegistry[mapId].map.invalidateSize(); return; }
-            const latEl     = document.getElementById('editLat' + siteId);
-            const lngEl     = document.getElementById('editLng' + siteId);
-            const tzInput   = document.getElementById('editTimezone' + siteId);
-            const tzDisplay = document.getElementById('editTimezoneDisplay' + siteId);
-            const tzLoading = document.getElementById('editTimezoneLoading' + siteId);
-            const addrEl    = modal.querySelector('textarea[name="address"]');
-            initMap(mapId, latEl, lngEl, latEl.value, lngEl.value, tzInput, tzDisplay, tzLoading, addrEl);
+            const siteId = modal.id.replace('editSiteModal', '');
+            const mapKey = 'editMap' + siteId;
+            if (recenter(mapKey)) return;
+            GMapPicker.init({
+                mapId:       mapKey,
+                latEl:       document.getElementById('editLat' + siteId),
+                lngEl:       document.getElementById('editLng' + siteId),
+                addressEl:   modal.querySelector('textarea[name="address"]'),
+                tzInputEl:   document.getElementById('editTimezone' + siteId),
+                tzDisplayEl: document.getElementById('editTimezoneDisplay' + siteId),
+                tzLoadingEl: document.getElementById('editTimezoneLoading' + siteId),
+            });
         });
     });
 
-    // ── "Go to Location" buttons ──────────────────────────────────
+    // -- "Go to Location" buttons --
     document.querySelectorAll('.btn-go-location').forEach(function (btn) {
         btn.addEventListener('click', function () {
-            const mapId = btn.dataset.mapId;
-            const la    = parseFloat(document.getElementById(btn.dataset.latId).value);
-            const lo    = parseFloat(document.getElementById(btn.dataset.lngId).value);
+            const la = parseFloat(document.getElementById(btn.dataset.latId).value);
+            const lo = parseFloat(document.getElementById(btn.dataset.lngId).value);
             if (isNaN(la) || isNaN(lo)) { alert('Please enter valid latitude and longitude values.'); return; }
-            if (!mapRegistry[mapId]) { alert('Please open the map first.'); return; }
-            mapRegistry[mapId].placePin(la, lo);
+            if (!GMapPicker.get(btn.dataset.mapId)) { alert('Please open the map first.'); return; }
+            GMapPicker.placePinOn(btn.dataset.mapId, la, lo);
         });
     });
 
-    // ── Re-open create modal on validation error ──────────────────
+    // -- Re-open create modal on validation error --
     @if($errors->has('client_id') || $errors->has('address') || $errors->has('latitude') || $errors->has('longitude'))
     document.addEventListener('DOMContentLoaded', function () {
         new bootstrap.Modal(document.getElementById('createSiteModal')).show();

@@ -420,7 +420,6 @@
     </div>
 
     @push('styles')
-    <link rel="stylesheet" href="{{ asset('assets/libs/leaflet/leaflet.css') }}">
     <style>
         .site-map { height: 260px; width: 100%; border-radius: 6px; border: 1px solid #dee2e6; }
         .address-suggestions {
@@ -441,7 +440,8 @@
     @endpush
 
     @push('scripts')
-    <script src="{{ asset('assets/libs/leaflet/leaflet.js') }}"></script>
+    @include('partials.google-maps')
+    <script src="{{ asset('assets/js/maps/gmap-picker.js') }}"></script>
     <script>
     function previewLogo(input, previewId) {
         const preview = document.getElementById(previewId);
@@ -452,122 +452,39 @@
         }
     }
 
-    // ── Client site map ───────────────────────────────────────────
-    const CLIENT_OSM_TILES = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-    const CLIENT_OSM_ATTR  = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
-    let clientSiteMap = null, clientSiteMarker = null;
-
-    function clientMapFetchTimezone(lat, lng) {
-        const input   = document.getElementById('clientSiteTimezone');
-        const display = document.getElementById('clientSiteTimezoneDisplay');
-        const loading = document.getElementById('clientSiteTimezoneLoading');
-        loading.style.display = '';
-        display.className = 'badge bg-secondary-subtle text-secondary fs-12';
-        fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&timezone=auto&forecast_days=0`)
-            .then(r => r.json())
-            .then(data => {
-                const tz = data.timezone || 'UTC';
-                input.value = tz; display.textContent = tz;
-                display.className = 'badge bg-success-subtle text-success fs-12';
-            })
-            .catch(() => { display.className = 'badge bg-warning-subtle text-warning fs-12'; })
-            .finally(() => { loading.style.display = 'none'; });
-    }
-
-    function clientMapReverseGeocode(lat, lng) {
-        const addrEl = document.getElementById('clientSiteAddress');
-        if (!addrEl) return;
-        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`, {
-            headers: { 'Accept-Language': 'en' }
-        })
-        .then(r => r.json())
-        .then(data => { if (data && data.display_name) addrEl.value = data.display_name; })
-        .catch(() => {});
-    }
-
-    function clientMapPlacePin(lat, lng, skipGeocode) {
-        if (clientSiteMarker) clientSiteMap.removeLayer(clientSiteMarker);
-        clientSiteMarker = L.marker([lat, lng]).addTo(clientSiteMap);
-        clientSiteMap.setView([lat, lng], 17);
-        document.getElementById('clientSiteLat').value = parseFloat(lat).toFixed(7);
-        document.getElementById('clientSiteLng').value = parseFloat(lng).toFixed(7);
-        clientMapFetchTimezone(lat, lng);
-        if (!skipGeocode) clientMapReverseGeocode(lat, lng);
-    }
-
-    function clientMapGoTo(btn) {
-        const lat = parseFloat(document.getElementById('clientSiteLat').value);
-        const lng = parseFloat(document.getElementById('clientSiteLng').value);
-        if (isNaN(lat) || isNaN(lng)) { alert('Please enter valid latitude and longitude.'); return; }
-        clientMapPlacePin(lat, lng, true);
-    }
-
-    // Address autocomplete
-    function debounceClient(fn, ms) { let t; return function() { clearTimeout(t); t = setTimeout(fn, ms); }; }
-    function clientHideSuggestions(ul) { ul.innerHTML = ''; ul.style.display = 'none'; }
-    function clientRenderSuggestions(results, ul, ta) {
-        ul.innerHTML = '';
-        if (!results.length) {
-            const li = document.createElement('li');
-            li.className = 'suggestion-searching text-muted'; li.textContent = 'No results found.';
-            ul.appendChild(li); ul.style.display = 'block'; return;
-        }
-        results.forEach(r => {
-            const li = document.createElement('li');
-            li.className = 'suggestion-item';
-            li.innerHTML = '<i class="ri-map-pin-line me-2 text-primary"></i>' + r.display_name;
-            li.addEventListener('mousedown', e => {
-                e.preventDefault(); ta.value = r.display_name; clientHideSuggestions(ul);
-                clientMapPlacePin(parseFloat(r.lat), parseFloat(r.lon), true);
-            });
-            ul.appendChild(li);
+    // ── Client site map (Google Maps) ─────────────────────────────
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('textarea[data-suggestions]').forEach(function (el) {
+            GMapPicker.attachAutocomplete(el);
         });
-        ul.style.display = 'block';
+    });
+
+    // Kept for the inline onclick on the "Go" button.
+    function clientMapGoTo(btn) {
+        const la = parseFloat(document.getElementById(btn.dataset.latId).value);
+        const lo = parseFloat(document.getElementById(btn.dataset.lngId).value);
+        if (isNaN(la) || isNaN(lo)) { alert('Please enter valid latitude and longitude.'); return; }
+        if (!GMapPicker.get(btn.dataset.mapId)) { alert('Please open the map first.'); return; }
+        GMapPicker.placePinOn(btn.dataset.mapId, la, lo, true);
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-        const ta = document.getElementById('clientSiteAddress');
-        const ul = document.getElementById('clientSiteSuggestions');
-        if (ta && ul) {
-            const doSearch = debounceClient(function() {
-                const q = ta.value.trim();
-                if (q.length < 3) { clientHideSuggestions(ul); return; }
-                ul.innerHTML = '<li class="suggestion-searching"><i class="ri-loader-4-line me-1"></i>Searching...</li>';
-                ul.style.display = 'block';
-                fetch('https://nominatim.openstreetmap.org/search?format=json&limit=5&q=' + encodeURIComponent(q), {
-                    headers: { 'Accept-Language': 'en' }
-                })
-                .then(r => r.json())
-                .then(results => clientRenderSuggestions(results, ul, ta))
-                .catch(() => clientHideSuggestions(ul));
-            }, 500);
-            ta.addEventListener('input', doSearch);
-            ta.addEventListener('blur', () => setTimeout(() => clientHideSuggestions(ul), 150));
-            ta.addEventListener('keydown', e => {
-                const items = ul.querySelectorAll('.suggestion-item');
-                const active = ul.querySelector('.suggestion-item.active');
-                if (!items.length) return;
-                if (e.key === 'ArrowDown') { e.preventDefault(); if (!active) items[0].classList.add('active'); else { active.classList.remove('active'); (active.nextElementSibling || items[0]).classList.add('active'); } }
-                else if (e.key === 'ArrowUp') { e.preventDefault(); if (active) { active.classList.remove('active'); (active.previousElementSibling || items[items.length-1]).classList.add('active'); } }
-                else if (e.key === 'Enter') { const sel = ul.querySelector('.suggestion-item.active'); if (sel) { e.preventDefault(); sel.dispatchEvent(new MouseEvent('mousedown')); } }
-                else if (e.key === 'Escape') clientHideSuggestions(ul);
-            });
-        }
-
-        // Init map when modal opens
-        document.getElementById('createClientModal').addEventListener('shown.bs.modal', function() {
-            if (clientSiteMap) { clientSiteMap.invalidateSize(); return; }
-            clientSiteMap = L.map('clientSiteMap').setView([-25.2744, 133.7751], 4);
-            L.tileLayer(CLIENT_OSM_TILES, { attribution: CLIENT_OSM_ATTR, maxZoom: 19 }).addTo(clientSiteMap);
-            clientSiteMap.on('click', e => clientMapPlacePin(e.latlng.lat, e.latlng.lng));
-            ['clientSiteLat', 'clientSiteLng'].forEach(id => {
-                document.getElementById(id).addEventListener('keydown', e => {
-                    if (e.key !== 'Enter') return;
-                    e.preventDefault();
-                    const la = parseFloat(document.getElementById('clientSiteLat').value);
-                    const lo = parseFloat(document.getElementById('clientSiteLng').value);
-                    if (!isNaN(la) && !isNaN(lo)) clientMapPlacePin(la, lo, true);
-                });
+        document.getElementById('createClientModal').addEventListener('shown.bs.modal', function () {
+            const slot = GMapPicker.get('clientSiteMap');
+            if (slot) {
+                Promise.resolve(slot.ready).then(function (s) { if (s && s.setCenter) s.setCenter(); });
+                return;
+            }
+            GMapPicker.init({
+                mapId:         'clientSiteMap',
+                latEl:         document.getElementById('clientSiteLat'),
+                lngEl:         document.getElementById('clientSiteLng'),
+                addressEl:     document.getElementById('clientSiteAddress'),
+                tzInputEl:     document.getElementById('clientSiteTimezone'),
+                tzDisplayEl:   document.getElementById('clientSiteTimezoneDisplay'),
+                tzLoadingEl:   document.getElementById('clientSiteTimezoneLoading'),
+                defaultCenter: { lat: -25.2744, lng: 133.7751 },   // Australia
+                defaultZoom:   4,
             });
         });
 

@@ -2,8 +2,6 @@
     <x-slot name="title">Buildings</x-slot>
 
     @push('styles')
-    <link rel="stylesheet" href="{{ asset('assets/libs/leaflet/leaflet.css') }}">
-    <link rel="stylesheet" href="{{ asset('assets/libs/leaflet/leaflet.draw.css') }}">
     <style>
         .zone-map { height: 260px; width: 100%; border-radius: 6px; border: 1px solid #dee2e6; }
         .color-swatch {
@@ -201,6 +199,7 @@
                                                                         <i class="ri-map-2-line text-primary"></i>Roof Zones
                                                                         <small class="text-muted fw-normal">Pick colour → name zone → Draw on map</small>
                                                                     </label>
+                                                                    <div id="editZoneWrap{{ $building->id }}">
                                                                     <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
                                                                         @foreach(['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#a855f7'] as $c)
                                                                         <span class="color-swatch {{ $loop->first ? 'active' : '' }}"
@@ -212,17 +211,27 @@
                                                                                class="form-control form-control-sm" style="max-width:150px"
                                                                                placeholder="Zone name...">
                                                                         <button type="button" class="btn btn-sm btn-outline-primary"
+                                                                                data-role="draw-zone"
                                                                                 onclick="startDraw('edit{{ $building->id }}')">
                                                                             <i class="ri-edit-2-line me-1"></i>Draw Zone
+                                                                        </button>
+                                                                        <button type="button" class="btn btn-sm btn-success d-none"
+                                                                                data-role="finish-zone"
+                                                                                onclick="finishDraw('edit{{ $building->id }}')">
+                                                                            <i class="ri-check-line me-1"></i>Finish Zone
                                                                         </button>
                                                                         <button type="button" class="btn btn-sm btn-outline-secondary"
                                                                                 onclick="clearAllZones('edit{{ $building->id }}')">
                                                                             <i class="ri-delete-bin-line me-1"></i>Clear All
                                                                         </button>
                                                                     </div>
+                                                                    <div class="alert alert-info fs-12 py-2 mb-2 d-none" data-role="draw-hint">
+                                                                        <i class="ri-information-line me-1"></i>Click on the map to add points. Double-click or press <strong>Finish Zone</strong> to close the shape. <kbd>Esc</kbd> cancels.
+                                                                    </div>
                                                                     <div id="editZoneMap{{ $building->id }}" class="zone-map mb-2"></div>
                                                                     <div id="editZoneList{{ $building->id }}" class="d-flex flex-wrap gap-1 mb-2"></div>
                                                                     <input type="hidden" name="roof_zones" id="editRoofZones{{ $building->id }}">
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -332,7 +341,7 @@
                                        value="{{ old('name_or_level') }}" required placeholder="e.g. Level 1, Roof Top">
                                 @error('name_or_level')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             </div>
-                            <div class="col-12">
+                            <div class="col-12" id="createZoneWrap">
                                 <label class="form-label d-flex align-items-center gap-2">
                                     <i class="ri-map-2-line text-primary"></i>Roof Zones
                                     <small class="text-muted fw-normal">Pick colour → name zone → Draw on map</small>
@@ -348,8 +357,14 @@
                                            class="form-control form-control-sm" style="max-width:150px"
                                            placeholder="Zone name...">
                                     <button type="button" class="btn btn-sm btn-outline-primary"
+                                            data-role="draw-zone"
                                             onclick="startDraw('create')">
                                         <i class="ri-edit-2-line me-1"></i>Draw Zone
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-success d-none"
+                                            data-role="finish-zone"
+                                            onclick="finishDraw('create')">
+                                        <i class="ri-check-line me-1"></i>Finish Zone
                                     </button>
                                     <button type="button" class="btn btn-sm btn-outline-secondary"
                                             onclick="clearAllZones('create')">
@@ -358,6 +373,9 @@
                                 </div>
                                 <div class="alert alert-light border fs-12 py-2 mb-2" id="createMapHint">
                                     <i class="ri-information-line me-1"></i>Select a site above to load the map at the site location.
+                                </div>
+                                <div class="alert alert-info fs-12 py-2 mb-2 d-none" data-role="draw-hint">
+                                    <i class="ri-information-line me-1"></i>Click on the map to add points. Double-click or press <strong>Finish Zone</strong> to close the shape. <kbd>Esc</kbd> cancels.
                                 </div>
                                 <div id="createZoneMap" class="zone-map mb-2" style="display:none"></div>
                                 <div id="createZoneList" class="d-flex flex-wrap gap-1 mb-2"></div>
@@ -378,27 +396,11 @@
     </div>
 
     @push('scripts')
-    <script src="{{ asset('assets/libs/leaflet/leaflet.js') }}"></script>
-    <script src="{{ asset('assets/libs/leaflet/leaflet.draw.js') }}"></script>
+    @include('partials.google-maps')
+    <script src="{{ asset('assets/js/maps/gmap-zone-editor.js') }}"></script>
     <script>
-    const OSM_TILES        = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-    const OSM_ATTR         = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
-    const SAT_TILES        = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-    const SAT_ATTR         = 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community';
-    const DEFAULT_LAT = 27.4716, DEFAULT_LNG = 89.6386, DEFAULT_ZOOM = 19;
-
-    // Site coordinates lookup
-    const siteCoords = {!! json_encode($sites->mapWithKeys(fn ($s) => [$s->id => ['lat' => $s->latitude ? (float)$s->latitude : null, 'lng' => $s->longitude ? (float)$s->longitude : null]])) !!};
-
-    // ── Zone editor state per context key (create | editBUILDINGID) ──
-    const zoneEditors = {};
-
-    function getEditor(key) {
-        if (!zoneEditors[key]) {
-            zoneEditors[key] = { map: null, drawnItems: null, drawControl: null, zones: [], activeColor: '#ef4444' };
-        }
-        return zoneEditors[key];
-    }
+    // Site coordinates lookup, consumed by centerMap() in gmap-zone-editor.js
+    window.siteCoords = {!! json_encode($sites->mapWithKeys(fn ($s) => [$s->id => ['lat' => $s->latitude ? (float)$s->latitude : null, 'lng' => $s->longitude ? (float)$s->longitude : null]])) !!};
 
     // ── Client → Site filter ─────────────────────────────────────────
     function filterSites(clientSelectId, siteSelectId) {
@@ -411,151 +413,21 @@
         });
     }
 
-    // ── Map initialisation ───────────────────────────────────────────
-    function initZoneMap(key, mapElId, lat, lng) {
-        const ed = getEditor(key);
-        if (ed.map) { ed.map.invalidateSize(); return; }
-
-        const hasCoords = lat && lng;
-        const map = L.map(mapElId, { layers: [] }).setView(
-            [hasCoords ? lat : DEFAULT_LAT, hasCoords ? lng : DEFAULT_LNG],
-            hasCoords ? DEFAULT_ZOOM : 13
-        );
-        const streetLayer    = L.tileLayer(OSM_TILES, { attribution: OSM_ATTR, maxZoom: 22 });
-        const satelliteLayer = L.tileLayer(SAT_TILES, { attribution: SAT_ATTR, maxZoom: 22 });
-        streetLayer.addTo(map);
-        L.control.layers({ 'Street': streetLayer, 'Satellite': satelliteLayer }, {}, { position: 'topright' }).addTo(map);
-
-        const drawnItems = new L.FeatureGroup();
-        map.addLayer(drawnItems);
-
-        const drawControl = new L.Control.Draw({
-            draw: {
-                polygon:   { shapeOptions: { color: ed.activeColor, fillColor: ed.activeColor, fillOpacity: 0.25 } },
-                polyline:  false,
-                rectangle: false,
-                circle:    false,
-                circlemarker: false,
-                marker:    false,
-            },
-            edit: { featureGroup: drawnItems, remove: false }
-        });
-        map.addControl(drawControl);
-
-        map.on(L.Draw.Event.CREATED, function (e) {
-            const layer = e.layer;
-            layer.setStyle({ color: ed.activeColor, fillColor: ed.activeColor, fillOpacity: 0.25 });
-            drawnItems.addLayer(layer);
-
-            const nameInput = document.getElementById(key === 'create' ? 'createZoneName' : key.replace('create','') + 'ZoneName' + key.replace('edit',''));
-            // Resolve zone name input id
-            const nameEl = getZoneNameEl(key);
-            const zoneName = nameEl ? nameEl.value.trim() : '';
-
-            const latlngs = layer.getLatLngs()[0].map(p => [p.lat, p.lng]);
-            const zone = { name: zoneName || ('Zone ' + (ed.zones.length + 1)), color: ed.activeColor, polygon: latlngs, layer };
-            ed.zones.push(zone);
-            if (nameEl) nameEl.value = '';
-            renderZoneList(key);
-        });
-
-        ed.map = map;
-        ed.drawnItems = drawnItems;
-        ed.drawControl = drawControl;
-    }
-
-    function getZoneNameEl(key) {
-        if (key === 'create') return document.getElementById('createZoneName');
-        const buildingId = key.replace('edit', '');
-        return document.getElementById('editZoneName' + buildingId);
-    }
-
-    function centerMap(key, siteId) {
-        const ed = getEditor(key);
-        if (!ed.map) return;
-        const c = siteCoords[siteId];
-        if (c && c.lat && c.lng) {
-            ed.map.setView([c.lat, c.lng], DEFAULT_ZOOM);
-        }
-    }
-
-    // ── Color selection ──────────────────────────────────────────────
-    function setZoneColor(key, el) {
-        const ed = getEditor(key);
-        ed.activeColor = el.dataset.color;
-        el.closest('.d-flex').querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
-        el.classList.add('active');
-    }
-
-    // ── Draw zone button ─────────────────────────────────────────────
-    function startDraw(key) {
-        const ed = getEditor(key);
-        if (!ed.map) {
-            alert('Please select a site first to load the map.');
-            return;
-        }
-        // Update draw control color to match active selection
-        ed.drawControl.setDrawingOptions({
-            polygon: { shapeOptions: { color: ed.activeColor, fillColor: ed.activeColor, fillOpacity: 0.25 } }
-        });
-        new L.Draw.Polygon(ed.map, { shapeOptions: { color: ed.activeColor, fillColor: ed.activeColor, fillOpacity: 0.25 } }).enable();
-    }
-
-    // ── Render zone badges ───────────────────────────────────────────
-    function renderZoneList(key) {
-        const ed = getEditor(key);
-        const listId = key === 'create' ? 'createZoneList' : 'editZoneList' + key.replace('edit', '');
-        const listEl = document.getElementById(listId);
-        if (!listEl) return;
-        listEl.innerHTML = '';
-        ed.zones.forEach((zone, i) => {
-            const badge = document.createElement('span');
-            badge.className = 'zone-badge';
-            badge.style.background = zone.color;
-            badge.innerHTML = `<i class="ri-map-2-line"></i>${zone.name}<i class="ri-close-line" onclick="removeZone('${key}', ${i})"></i>`;
-            listEl.appendChild(badge);
-        });
-    }
-
-    function removeZone(key, index) {
-        const ed = getEditor(key);
-        const zone = ed.zones[index];
-        if (zone.layer && ed.drawnItems) ed.drawnItems.removeLayer(zone.layer);
-        ed.zones.splice(index, 1);
-        renderZoneList(key);
-    }
-
-    function clearAllZones(key) {
-        const ed = getEditor(key);
-        if (ed.drawnItems) ed.drawnItems.clearLayers();
-        ed.zones = [];
-        renderZoneList(key);
-    }
-
-    // ── Serialize zones to hidden input before submit ────────────────
-    function serializeZones(key, inputId) {
-        const ed = getEditor(key);
-        const input = document.getElementById(inputId);
-        if (!input) return;
-        const data = ed.zones.map(z => ({ name: z.name, color: z.color, polygon: z.polygon }));
-        input.value = data.length ? JSON.stringify(data) : '';
-    }
-
     // ── Create modal: site change ────────────────────────────────────
     function onCreateSiteChange(siteId) {
         const mapEl = document.getElementById('createZoneMap');
         const hint  = document.getElementById('createMapHint');
         if (!siteId) return;
 
-        const c = siteCoords[siteId];
+        const c = window.siteCoords[siteId];
         mapEl.style.display = 'block';
         hint.style.display  = 'none';
 
-        if (!zoneEditors['create'] || !zoneEditors['create'].map) {
+        const ed = window.getZoneEditor('create');
+        if (!ed.ready) {
             initZoneMap('create', 'createZoneMap', c ? c.lat : null, c ? c.lng : null);
         } else {
             centerMap('create', siteId);
-            zoneEditors['create'].map.invalidateSize();
         }
     }
 
@@ -569,53 +441,32 @@
         centerMap('edit' + buildingId, siteId);
     }
 
-    // ── Load existing zones into edit map ────────────────────────────
-    function loadExistingZones(key, zones) {
-        const ed = getEditor(key);
-        if (!ed.map || !zones || !zones.length) return;
-
-        zones.forEach(zone => {
-            if (!zone.polygon || !zone.polygon.length) return;
-            const latlngs = zone.polygon.map(p => Array.isArray(p) ? p : [p.lat, p.lng]);
-            const layer = L.polygon(latlngs, {
-                color: zone.color || '#3b82f6',
-                fillColor: zone.color || '#3b82f6',
-                fillOpacity: 0.25
-            });
-            ed.drawnItems.addLayer(layer);
-            ed.zones.push({ name: zone.name, color: zone.color, polygon: zone.polygon, layer });
-        });
-        renderZoneList(key);
-    }
-
-    // ── Edit modal open → init map + load zones ───────────────────────
+    // ── Edit modal open → init map + load saved zones once ───────────
     document.querySelectorAll('[id^="editBuildingModal"]').forEach(function (modal) {
         modal.addEventListener('shown.bs.modal', function () {
             const buildingId = modal.id.replace('editBuildingModal', '');
             const key        = 'edit' + buildingId;
             const siteId     = modal.dataset.siteId;
-            const c          = siteCoords[siteId] || {};
+            const c          = window.siteCoords[siteId] || {};
 
             initZoneMap(key, 'editZoneMap' + buildingId, c.lat, c.lng);
 
-            // Load existing zones once
-            const ed = getEditor(key);
+            const ed = window.getZoneEditor(key);
             if (!ed._loaded) {
                 ed._loaded = true;
                 try {
-                    const existing = JSON.parse(modal.dataset.zones || '[]');
-                    loadExistingZones(key, existing);
-                } catch(e) {}
+                    loadExistingZones(key, JSON.parse(modal.dataset.zones || '[]'));
+                } catch (e) {}
             }
         });
     });
 
     // ── Re-open create modal on validation error ──────────────────────
-    if (<?= ($errors->has('site_id') || $errors->has('name_or_level') || $errors->has('building_code')) ? 'true' : 'false' ?>) {
-        document.addEventListener('DOMContentLoaded', function () {
-            new bootstrap.Modal(document.getElementById('createBuildingModal')).show();
-        });
-    }
+    @if($errors->has('site_id') || $errors->has('name_or_level') || $errors->has('building_code'))
+    document.addEventListener('DOMContentLoaded', function () {
+        new bootstrap.Modal(document.getElementById('createBuildingModal')).show();
+    });
+    @endif
     </script>
     @endpush
 
